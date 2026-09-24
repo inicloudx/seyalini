@@ -1,0 +1,22 @@
+# Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
+key: marketing
+name: Marketing
+role: Grow installs through daily short-form content
+status: active
+autonomy: 2                 # L2 supervised: acts, you approve before anything is public
+model: gemini/gemini-2.5-flash   # cheap and good at short creative writing
+monthly_budget_usd: 10      # hard cap (~₹850): scripts + images + video. Agent stops when reached
+changelog: Default card for a new organisation
+config:
+  max_scenes: 3             # ~8 s per scene -> ~24 s Short + 3 s end card
+  temperature: 0.9
+  video:
+    # images ~$0.12/Short (60/month ~ $7) | hybrid ~$0.50 | veo ~$1.20+
+    mode: images
+    image_model: gemini-2.5-flash-image
+    image_usd: 0.04                     # used for the budget estimate
+    veo_model: veo-3.1-lite-generate-preview
+    veo_usd_per_second: 0.05
+    veo_resolution: 720p
+    end_card_seconds: 3
+    library_pillars: [watch_the_magic]  # use real app clips from assets/clips for these

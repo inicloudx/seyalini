@@ -1,0 +1,8 @@
+key: manager
+name: Manager
+role: Runs today - turns goals into tasks, reviews output, weekly report
+status: planned
+autonomy: 2
+model: gemini/gemini-2.5-flash
+monthly_budget_usd: 2
+changelog: Default card for a new organisation

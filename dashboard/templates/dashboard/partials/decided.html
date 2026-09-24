@@ -1,0 +1,16 @@
+<article id="task-{{ task.id }}" style="border-top:1px solid var(--line2);padding:12px 0">
+  {% if task.kind == "short_video" %}
+    {% if task.status == "approved" %}
+    <span class="pill" style="color:var(--ok)">Approved</span> {{ task.result.title }} is ready to publish. Automatic upload comes in Step 5; for now, download it from “Ready to publish”.
+    {% else %}
+    <span class="pill" style="color:var(--warn)">Redo</span> The video is being remade{% if task.approval.reason %} with your note: “{{ task.approval.reason }}”{% endif %}.
+    {% endif %}
+  {% else %}
+    {% if task.status == "approved" %}
+    <span class="pill" style="color:var(--ok)">Approved</span> {{ task.result.title }}: the video is being made now. It shows up here when it's ready.
+    {% else %}
+    <span class="pill" style="color:var(--warn)">Redo</span> {{ task.result.title }}: the agent is rewriting it{% if task.approval.reason %} and learned “{{ task.approval.reason }}”{% endif %}.
+    {% endif %}
+  {% endif %}
+  <div hx-get="{% url 'dashboard:running' %}" hx-trigger="load delay:1s" hx-target="#running" hx-swap="outerHTML"></div>
+</article>

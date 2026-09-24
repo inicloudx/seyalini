@@ -1,0 +1,8 @@
+key: developer
+name: Developer
+role: App builds, bug fixes and features
+status: planned
+autonomy: 1
+model: ""
+monthly_budget_usd: 10
+changelog: Default card for a new organisation

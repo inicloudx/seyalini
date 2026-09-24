@@ -1,0 +1,10 @@
+# Tenant 1. A new customer = copy this folder, change the values.
+slug: inixr
+name: INIXR Technology
+theme:                     # white-label: the dashboard uses these
+  accent: "#C2410C"
+  logo_text: IX
+settings:
+  use_platform_keys: true   # INIXR may use the API keys in .env; other organisations bring their own
+  timezone: Asia/Kolkata
+  owner_name: Nithy

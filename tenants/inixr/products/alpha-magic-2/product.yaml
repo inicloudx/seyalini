@@ -1,0 +1,42 @@
+# Written by Seyalini when you activated the brief. Safe to edit; run load_tenants after.
+slug: alpha-magic-2
+name: Alpha Magic
+status: archived
+config:
+  marketing: false
+  onboarding:
+    name: Alpha Magic
+    store_url: https://play.google.com/store/apps/details?id=com.inixrtechnology.alphamagic
+    what_it_does: "✨ AlphaMagic — Where the Alphabet Comes Alive in AR\r\n\r\nAlphaMagic\
+      \ brings the alphabet to life through augmented reality, designed for kids ages\
+      \ 3-8. Each letter from A to Z transforms into a cinematic 3D scene right in\
+      \ your room — aeroplanes circling overhead, boats sailing across water, dinosaurs\
+      \ roaring in cages. With clear voice pronunciation, drag-and-pinch controls,\
+      \ and a magical Zoo Safari finale that unlocks after visiting every animal,\
+      \ AlphaMagic turns letter learning into an adventure kids beg to repeat.\r\n\
+      \r\n\U0001F393 HOW IT WORKS\r\n1. Tap any letter on the home screen\r\n2. Hear\
+      \ the letter and word (\"A for Aeroplane\")\r\n3. Watch the 3D AR scene appear\
+      \ in your real room\r\n4. Drag with one finger to spin, pinch with two to zoom\r\
+      \n5. Tap the back button to return to the alphabet\r\n\r\n\U0001F981 26 UNIQUE\
+      \ LETTER ADVENTURES\r\nA for Aeroplane • B for Boat • C for Chameleon • D for\
+      \ Dinosaur • E for Elephant • F for Fish • G for Gorilla • H for Hero • I for\
+      \ Ice Dragon • J for Jellyfish • K for King Cobra • L for Lion • M for Megalodon\
+      \ • N for Ninja • O for Octopus • P for Penguin • Q for Queen Parrot • R for\
+      \ Rocket • S for Spaceship • T for Train • U for Unicorn • V for Volcano • W\
+      \ for Wizard • X for X-Ray • Y for Yak • Z for Zoo\r\n\r\n\U0001F31F KEY FEATURES\r\
+      \n• 26 cinematic 3D AR scenes — full 90-second experiences\r\n• Clear voice\
+      \ pronunciation for every letter\r\n• Drag and pinch to explore each scene\r\
+      \n• 3-screen onboarding for new users\r\n• Parental gate before any purchase\r\
+      \n• Zoo finale unlocks after visiting all animals (gamified learning!)\r\n•\
+      \ Resume-aware downloads for slow connections\r\n• Works offline once letters\
+      \ are downloaded\r\n\r\n\U0001F6E1️ SAFE FOR FAMILIES\r\n• Zero advertisements\r\
+      \n• Zero personal data collected\r\n• No social features or chat\r\n• No location\
+      \ tracking\r\n• Compliant with Google Families Policy and COPPA\r\n• Camera\
+      \ used only in real-time for AR (never recorded)\r\n• Made for ages 3-8"
+    audience: kids 3-8 the parents guide the childrens
+    pricing: $1
+    languages: English
+    goal: installs
+    tone: magic
+    brand_colour: '#c2410c'
+  accent: '#c2410c'

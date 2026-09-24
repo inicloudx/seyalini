@@ -1,0 +1,27 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Platform · Seyalini{% endblock %}
+{% block content %}
+<header><h1 style="font-size:30px">Platform</h1><p class="muted" style="margin:4px 0 0">Only you (the platform admin) see this. Every organisation has its own logins, apps, keys, budget and data.</p></header>
+{% for m in messages %}<div class="msg" role="status">{{ m }}</div>{% endfor %}
+<section class="card">
+  <h2 style="font-size:20px;margin-bottom:8px">Organisations</h2>
+  {% for o in orgs %}
+  <div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line2);flex-wrap:wrap">
+    <b style="min-width:180px">{{ o.t.name }}</b>
+    <span class="muted" style="flex:1;font-size:13px">{{ o.members }} member{{ o.members|pluralize }} · {{ o.products }} app{{ o.products|pluralize }} ·
+      {% if o.has_key %}own Gemini key{% elif o.platform %}uses your keys{% else %}<b style="color:var(--warn)">no key (free sample mode)</b>{% endif %}</span>
+    <form method="post" action="{% url 'dashboard:platform_open' o.t.slug %}">{% csrf_token %}<button class="btn">{% if o.t == tenant %}Current{% else %}Open{% endif %}</button></form>
+  </div>
+  {% endfor %}
+</section>
+<form class="card form" method="post" style="max-width:760px">{% csrf_token %}
+  <h2 style="font-size:20px">Create an organisation</h2>
+  <p class="muted" style="margin:0">Creates the organisation, its owner login and the default AI team (Marketing on, others planned). The owner then adds their key, their apps and their team.</p>
+  {% for f in form %}
+  <div>{% if f.field.widget.input_type == "checkbox" %}<label style="display:flex;gap:8px;align-items:center">{{ f }} {{ f.label }}</label>
+    {% else %}<label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+    {% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+  {% endfor %}
+  <button class="btn primary" style="align-self:flex-start">Create organisation</button>
+</form>
+{% endblock %}

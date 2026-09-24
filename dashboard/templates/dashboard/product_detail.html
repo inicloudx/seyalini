@@ -1,0 +1,87 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ product.name }} · Seyalini{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block content %}
+<header style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+  <div>
+    <a href="{% url 'dashboard:products' %}" style="font-size:13px">← Products</a>
+    <h1 style="font-size:30px">{{ product.name }}</h1>
+    <p class="muted" style="margin:4px 0 0">
+      <span class="pill" style="color:{% if product.status == 'live' %}var(--ok){% else %}var(--warn){% endif %}">{% if product.status == 'live' %}Live{% elif product.status == 'review' %}Brief to review{% elif product.status == 'archived' %}Archived{% else %}Setting up{% endif %}</span>
+      · Marketing {% if product.config.marketing %}on, {{ product.config.shorts_per_day|default:2 }}/day{% else %}off{% endif %}
+      {% if product.config.store_url %}· <a href="{{ product.config.store_url }}" target="_blank" rel="noopener">Play Store</a>{% endif %}
+      · logo {% if has_logo %}✓{% else %}missing{% endif %} · {{ screens }} store screenshot{{ screens|pluralize }} saved for videos
+    </p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn" href="{% url 'dashboard:home' %}?p={{ product.slug }}" style="display:inline-flex;align-items:center;text-decoration:none">Open in Command Center</a>
+    {% if is_owner %}<a class="btn" href="{% url 'dashboard:product_improve' product.slug %}" style="display:inline-flex;align-items:center;text-decoration:none">Improve with AI</a>{% endif %}
+  </div>
+</header>
+
+{% if product.status == "archived" %}
+<section class="card" style="border-color:var(--warn);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <span><b>This app is archived.</b> The agents ignore it. Nothing was deleted.</span>
+  <form method="post" action="{% url 'dashboard:product_restore' product.slug %}">{% csrf_token %}<button class="btn primary">Restore</button></form>
+</section>
+{% endif %}
+{% for m in messages %}<div class="msg">{{ m }}</div>{% endfor %}
+
+{% if running %}
+<section class="card" style="border-color:var(--info)" aria-live="polite">
+  <span class="pill" style="color:var(--info)"><span class="dot"></span>Working</span>
+  The agent is reading the store listing and screenshots and writing the brief. This page refreshes by itself.
+</section>
+{% elif last and last.status == "failed" %}
+<section class="card" style="border-color:#B42318"><b>The last attempt failed:</b> {{ last.result.error }}. Try “Improve with AI” again.</section>
+{% endif %}
+
+{% if draft %}
+<section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <div class="card" style="background:#1E1C2B;color:#EDEBF7;border-color:#1E1C2B">
+    <h2 style="font-size:18px;margin-bottom:8px">What the agent improved</h2>
+    <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">{% for i in draft.improvements %}<li>{{ i }}</li>{% empty %}<li>—</li>{% endfor %}</ul>
+    {% if draft.listing.title %}<p style="margin:10px 0 0;color:#B7ACFF;font-size:12px">Read from Play Store: {{ draft.listing.title }}{% if draft.listing.rating %} · {{ draft.listing.rating }}{% endif %}{% if draft.listing.content_rating %} · {{ draft.listing.content_rating }}{% endif %} · {{ draft.screens_saved }} screenshots studied</p>{% endif %}
+  </div>
+  <div class="card" style="border-color:var(--warn)">
+    <h2 style="font-size:18px;margin-bottom:8px">Questions for you</h2>
+    <p class="muted" style="margin:0 0 6px;font-size:12px">Answer them by editing the brief below, or add them to “Improve with AI”.</p>
+    <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">{% for q in draft.questions %}<li>{{ q }}</li>{% empty %}<li>None, the agent had everything it needed.</li>{% endfor %}</ul>
+  </div>
+</section>
+{% endif %}
+
+{% if is_owner %}<form class="card form" method="post">
+  {% csrf_token %}
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+    <h2 style="font-size:20px">{% if draft %}Review the new brief{% else %}Current brand brief{% endif %}</h2>
+    <span class="muted" style="font-size:12px">Every agent reads this before working. Edit freely.</span>
+  </div>
+  <div><label for="id_brief">Brand brief (Markdown)</label>{{ form.brief }}</div>
+  <div><label for="id_pillars">{{ form.pillars.label }}</label>{{ form.pillars }}<div class="help">{{ form.pillars.help_text }}</div></div>
+  <div><label for="id_visual_style">{{ form.visual_style.label }}</label>{{ form.visual_style }}<div class="help">Added to every image and video prompt.</div></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <button class="btn primary" type="submit">{% if draft %}Activate this brief{% else %}Save changes{% endif %}</button>
+    {% if draft and product.status == "live" %}<button class="btn" type="submit" form="discard">Discard draft, keep current</button>{% endif %}
+  </div>
+</form>
+{% if product.status != "archived" %}
+<section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <form class="card form" method="post" action="{% url 'dashboard:product_settings' product.slug %}">
+    {% csrf_token %}
+    <h2 style="font-size:18px">Marketing settings</h2>
+    <label style="display:flex;gap:8px;align-items:center">{{ settings_form.marketing }} {{ settings_form.marketing.label }}</label>
+    {% if product.status != "live" %}<span class="muted" style="font-size:12px">Activate the brief above first.</span>{% endif %}
+    <div><label for="{{ settings_form.shorts_per_day.id_for_label }}">{{ settings_form.shorts_per_day.label }}</label>{{ settings_form.shorts_per_day }}</div>
+    <button class="btn" style="align-self:flex-start">Save settings</button>
+  </form>
+  <div class="card" style="display:flex;flex-direction:column;gap:8px">
+    <h2 style="font-size:18px">Archive this app</h2>
+    <span class="muted">Use this for duplicates or apps you no longer market. The agents stop working on it, pending items are closed, and nothing is deleted.</span>
+    <form method="post" action="{% url 'dashboard:product_archive' product.slug %}" onsubmit="return confirm('Archive {{ product.name|escapejs }}? You can restore it later.')">{% csrf_token %}<button class="btn">Archive {{ product.name }}</button></form>
+  </div>
+</section>
+{% endif %}
+{% else %}<section class="card"><h2 style="font-size:20px;margin-bottom:8px">Brand brief</h2><pre style="white-space:pre-wrap;font:inherit;margin:0">{{ product.brief }}</pre></section>{% endif %}
+<form id="discard" method="post" action="{% url 'dashboard:product_discard' product.slug %}">{% csrf_token %}</form>
+{% endblock %}

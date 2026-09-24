@@ -1,0 +1,29 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Products · Seyalini{% endblock %}
+{% block content %}
+<header style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+  <div><h1 style="font-size:30px">Products</h1><p class="muted" style="margin:4px 0 0">Every app the agents work for. Each one has a brand brief they read before doing anything.</p></div>
+  {% if is_owner %}<a class="btn primary" href="{% url 'dashboard:product_new' %}" style="display:inline-flex;align-items:center;text-decoration:none">+ Add your app</a>{% endif %}
+</header>
+{% for m in messages %}<div class="msg">{{ m }}</div>{% endfor %}
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+  {% for p in products %}
+  <a class="card" href="{% url 'dashboard:product' p.slug %}" style="text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">{{ p.name }}</b>
+      <span class="pill" style="color:{% if p.status == 'live' %}var(--ok){% else %}var(--warn){% endif %}">{% if p.status == 'live' %}Live{% elif p.status == 'review' %}Brief to review{% else %}Setting up{% endif %}</span></div>
+    <span class="muted" style="font-size:13px">{{ p.config.pillars|length }} content pillars · {% if p.config.marketing %}Marketing on, {{ p.config.shorts_per_day|default:2 }}/day{% else %}Marketing off{% endif %}{% if p.config.draft %} · <b style="color:var(--warn)">new draft waiting</b>{% endif %}</span>
+  </a>
+  {% empty %}<p class="muted">No products yet. Click “+ Add your app” to start.</p>{% endfor %}
+</div>
+{% if archived %}
+<details class="card">
+  <summary style="cursor:pointer;font-weight:600">Archived ({{ archived|length }})</summary>
+  {% for p in archived %}
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line2);margin-top:8px">
+    <a href="{% url 'dashboard:product' p.slug %}">{{ p.name }}</a>
+    <form method="post" action="{% url 'dashboard:product_restore' p.slug %}">{% csrf_token %}<button class="btn">Restore</button></form>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endblock %}

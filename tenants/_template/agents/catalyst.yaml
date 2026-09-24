@@ -1,0 +1,8 @@
+key: catalyst
+name: Catalyst
+role: Improves tomorrow - finds gaps, proposes automations, rules and new agents
+status: planned
+autonomy: 1
+model: gemini/gemini-2.5-flash
+monthly_budget_usd: 2
+changelog: Default card for a new organisation

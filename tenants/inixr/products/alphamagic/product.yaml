@@ -1,0 +1,64 @@
+# AlphaMagic AR. Edit and run `python manage.py load_tenants`.
+slug: alphamagic
+name: AlphaMagic AR
+status: live
+config:
+  marketing: true
+  store_url: https://play.google.com/store/apps/details?id=com.inixrtechnology.alphamagic
+  accent: '#C2410C'
+  visual_style: Cinematic, bright 3D animated scenes appearing in augmented reality
+    inside a real, cosy home room (aeroplanes, boats, dinosaurs, rockets, animals)
+    next to a glowing alphabet letter; soft daylight, rounded friendly shapes, cheerful
+    saturated colours.
+  platforms:
+  - youtube_shorts
+  - instagram_reels
+  - facebook_reels
+  youtube_made_for_kids: true
+  shorts_per_day: 2
+  topic_repeat_days: 7
+  pillars:
+  - key: letter_of_the_day
+    name: Letter of the Day
+    idea: One letter comes alive in AR
+    uses_letter: true
+  - key: watch_the_magic
+    name: Watch the Magic
+    idea: App demo, the AR reveal moment
+  - key: parent_tip
+    name: Parent Tip
+    idea: Learning through play, practical tip for parents
+  - key: word_fun_fact
+    name: Word Fun Fact
+    idea: Fun fact tied to a letter's word
+    uses_letter: true
+  - key: teacher_corner
+    name: Teacher Corner
+    idea: How preschool and primary teachers use AR in class (B2B)
+  letter_words:
+    A: Aeroplane
+    B: Boat
+    C: Chameleon
+    D: Dinosaur
+    E: Elephant
+    F: Fish
+    G: Gorilla
+    H: Hero
+    I: Ice Dragon
+    J: Jellyfish
+    K: King Cobra
+    L: Lion
+    M: Megalodon
+    N: Ninja
+    O: Octopus
+    P: Penguin
+    Q: Queen Parrot
+    R: Rocket
+    S: Spaceship
+    T: Train
+    U: Unicorn
+    V: Volcano
+    W: Wizard
+    X: X-Ray
+    Y: Yak
+    Z: Zoo

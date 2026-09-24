@@ -1,0 +1,48 @@
+# Seyalini local lab: `docker compose up`  ->  http://localhost:8000
+#
+# If DATABASE_URL in .env points to a shared cloud Postgres (e.g. Neon free tier),
+# every laptop sees the same data and you can ignore the local `db` service.
+
+x-app: &app
+  build: .
+  env_file: .env
+  volumes:
+    - .:/app
+  depends_on:
+    - db
+    - redis
+
+services:
+  db:
+    image: pgvector/pgvector:pg16      # Postgres + pgvector (AI memory later)
+    environment:
+      POSTGRES_DB: seyalini
+      POSTGRES_USER: seyalini
+      POSTGRES_PASSWORD: seyalini
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+
+  web:
+    <<: *app
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py load_tenants &&
+             python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+
+  worker:                               # runs agent jobs in the background
+    <<: *app
+    command: celery -A config worker -l info --concurrency 2
+
+  beat:                                 # the clock: fires the daily schedule
+    <<: *app
+    command: celery -A config beat -l info
+
+volumes:
+  pgdata:

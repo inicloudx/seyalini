@@ -1,0 +1,157 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Command Center · Seyalini{% endblock %}
+{% block content %}
+<header style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+  <div>
+    <h1 style="font-size:30px">Good {% now "A" as ampm %}{% if ampm == "AM" %}morning{% else %}afternoon{% endif %}, {{ tenant.settings.owner_name|default:user.get_username }}</h1>
+    <p class="muted" style="margin:4px 0 0">{% now "D j M" %} · {{ all_pending }} decision{{ all_pending|pluralize }} need{{ all_pending|pluralize:"s," }} you · scripts arrive at 7 AM and 2 PM · video mode: <b>{{ video_mode }}</b></p>
+  </div>
+  <div id="write" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    {% if writable and can_review %}
+    <form hx-post="{% url 'dashboard:run_marketing' %}" hx-disabled-elt="find button" method="post" action="{% url 'dashboard:run_marketing' %}" style="display:flex;gap:8px;align-items:center">{% csrf_token %}
+      {% if writable|length == 1 %}
+      <input type="hidden" name="product" value="{{ writable.0.slug }}">
+      <button class="btn primary">Write a Short now · {{ writable.0.name }}</button>
+      {% else %}
+      <label for="write-product" class="muted" style="font-size:13px">Write a Short for</label>
+      <select id="write-product" name="product" style="height:38px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);padding:0 8px">
+        {% for p in writable %}<option value="{{ p.slug }}">{{ p.name }}</option>{% endfor %}
+      </select>
+      <button class="btn primary">Write now</button>
+      {% endif %}
+    </form>
+    {% elif products %}
+    <span class="muted" style="font-size:13px">{% if focus %}Marketing is off for {{ focus.name }}.{% else %}No app has marketing switched on yet.{% endif %}</span>
+    {% endif %}
+  </div>
+</header>
+
+{% if products|length > 1 %}
+<nav aria-label="Choose app" style="display:flex;gap:6px;flex-wrap:wrap">
+  <a href="?p=all" class="pill" style="padding:8px 14px;font-size:13px;text-decoration:none;{% if not focus %}background:var(--ink);color:var(--bg){% else %}color:var(--ink){% endif %}">All apps{% if all_pending %} · {{ all_pending }}{% endif %}</a>
+  {% for p in products %}
+  <a href="?p={{ p.slug }}" class="pill" style="padding:8px 14px;font-size:13px;text-decoration:none;{% if focus == p %}background:var(--ink);color:var(--bg){% else %}color:var(--ink){% endif %}">
+    {{ p.name }}{% if p.status != "live" %} (setting up){% elif not p.config.marketing %} (off){% endif %}{% if p.pending_count %} · {{ p.pending_count }}{% endif %}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% for m in messages %}<div class="msg" role="status">{{ m }}</div>{% endfor %}
+
+{% if next_step and is_owner %}
+<section class="card" aria-label="Next step" style="border-color:var(--accent);display:flex;flex-direction:column;gap:10px">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">Next step · {{ steps_done }} of {{ steps|length }} done</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:720px">
+      <h2 style="font-size:22px">{{ next_step.title }}</h2>
+      <span class="muted">{{ next_step.why }}</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% if next_step.post_url %}
+      <form method="post" action="{{ next_step.post_url }}">{% csrf_token %}<input type="hidden" name="next" value="home"><button class="btn primary">{{ next_step.action }}</button></form>
+      <a class="btn" href="{{ next_step.alt_url }}" style="display:inline-flex;align-items:center;text-decoration:none">{{ next_step.alt_action }}</a>
+      {% else %}
+      <a class="btn primary" href="{{ next_step.url }}" {% if next_step.external %}target="_blank" rel="noopener"{% endif %} style="display:inline-flex;align-items:center;text-decoration:none">{{ next_step.action }}</a>
+      {% endif %}
+    </div>
+  </div>
+  <details>
+    <summary style="cursor:pointer;font-size:13px" class="muted">Show all setup steps</summary>
+    <ol style="margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+      {% for st in steps %}<li style="{% if st.done %}color:var(--muted);text-decoration:line-through{% endif %}">{{ st.title }}{% if st.done %} ✓{% endif %}</li>{% endfor %}
+    </ol>
+  </details>
+</section>
+{% endif %}
+
+{% if dry_run %}<div class="banner"><b>Dry-run mode:</b> {{ tenant.name }} has no Gemini key yet, so everything is free sample output.{% if is_owner %} <a href="{% url 'dashboard:settings' %}#ai">Add the key in Settings</a> to go live.{% endif %}</div>{% endif %}
+{% include "dashboard/partials/running.html" %}
+
+<section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))" aria-label="Key numbers">
+  <div class="card"><div class="muted">Waiting for you{% if focus %} · {{ focus.name }}{% endif %}</div><div style="font-family:var(--display);font-size:26px;font-weight:600">{{ pending|length }}</div></div>
+  <div class="card"><div class="muted">Scripts this week</div><div style="font-family:var(--display);font-size:26px;font-weight:600">{{ kpi.scripts_week }} <span class="muted" style="font-size:15px">/ {{ kpi.target }} target</span></div></div>
+  <div class="card"><div class="muted">Your approval rate (30 d)</div><div style="font-family:var(--display);font-size:26px;font-weight:600">{% if kpi.approval_rate is not None %}{{ kpi.approval_rate }}%{% else %}–{% endif %}</div><div class="muted" style="font-size:12px">Higher = agents learned your taste</div></div>
+  <div class="card"><div class="muted">AI spend this month (all apps)</div><div style="font-family:var(--display);font-size:26px;font-weight:600">${{ kpi.spend|floatformat:2 }} <span class="muted" style="font-size:15px">/ ${{ kpi.budget|floatformat:0 }}</span></div><div class="bar"><i style="width:{{ kpi.spend_pct }}%"></i></div></div>
+</section>
+
+<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(320px,420px);align-items:start">
+  <div class="grid">
+    <section class="card" id="inbox" aria-label="Needs your decision">
+      <h2 style="font-size:20px;margin-bottom:12px">Needs your decision</h2>
+      {% for task in pending %}{% if task.kind == "product_brief" %}
+      <article id="task-{{ task.id }}" style="border-top:1px solid var(--line2);padding:14px 0;display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:12px;font-weight:600;color:var(--idea);text-transform:uppercase;letter-spacing:.06em">Brand brief · {{ task.product.name }}</span>
+        <h3 style="font-size:18px">The agent wrote a brand brief for {{ task.product.name }}</h3>
+        {% if task.result.questions %}<span class="muted">{{ task.result.questions|length }} question{{ task.result.questions|length|pluralize }} for you inside.</span>{% endif %}
+        <a class="btn primary" href="{% url 'dashboard:product' task.product.slug %}" style="align-self:flex-start;display:inline-flex;align-items:center;text-decoration:none">Review brief</a>
+      </article>
+      {% else %}{% include "dashboard/partials/approval.html" %}{% endif %}{% empty %}
+        <p class="muted" style="margin:0">Nothing waiting{% if focus %} for {{ focus.name }}{% endif %}. The next scripts arrive at 7 AM and 2 PM, or press “Write a Short now” at the top.</p>
+      {% endfor %}
+    </section>
+
+    {% if ready %}
+    <section class="card" aria-label="Ready to publish">
+      <h2 style="font-size:20px;margin-bottom:10px">Ready to publish</h2>
+      <p class="muted" style="margin:0 0 10px">Approved videos. Automatic upload to YouTube, Instagram and Facebook comes in Step 5.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        {% for v in ready %}
+        <a href="/media/{{ v.result.video }}" download style="display:flex;flex-direction:column;gap:6px;width:130px;text-decoration:none;color:var(--ink)">
+          <img src="/media/{{ v.result.thumbnail }}" alt="" style="width:130px;aspect-ratio:9/16;object-fit:cover;border-radius:8px">
+          <span style="font-size:12px">{{ v.result.title|truncatechars:48 }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="card" aria-label="Recent decisions">
+      <h2 style="font-size:20px;margin-bottom:10px">Recent</h2>
+      {% for t in recent %}
+      <div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line2)">
+        <span class="pill" style="color:{% if t.status == 'approved' or t.status == 'done' %}var(--ok){% elif t.status == 'failed' %}#B42318{% else %}var(--warn){% endif %}">{{ t.get_status_display }}</span>
+        <span class="mono muted">{% if t.kind == "short_video" %}video{% else %}script{% endif %}</span>
+        <span style="flex:1">{{ t.result.title|default:t.title }}{% if t.status == "failed" %} <span class="muted">· {{ t.result.error|truncatechars:90 }}</span>{% endif %}</span>
+        {% if t.approval.reason %}<span class="muted" style="font-size:12px">“{{ t.approval.reason }}”</span>{% endif %}
+      </div>
+      {% empty %}<p class="muted" style="margin:0">No decisions yet.</p>{% endfor %}
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="card" aria-label="AI team">
+      <h2 style="font-size:20px;margin-bottom:10px">Your AI team</h2>
+      {% for a in agents %}
+      <div style="padding:10px 0;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <b>{{ a.name }} <span class="muted mono">v{{ a.version }} · L{{ a.autonomy }}</span></b>
+          <span class="pill" style="color:{% if a.status == 'active' %}var(--ok){% else %}var(--muted){% endif %}"><span class="dot"></span>{{ a.get_status_display }}</span>
+        </div>
+        <span class="muted" style="font-size:13px">{{ a.role }}</span>
+        {% if a.status == "active" %}
+        <div class="mono muted">${{ a.spent|floatformat:3 }} of ${{ a.monthly_budget_usd|floatformat:0 }} · {{ a.model }}</div>
+        <div class="bar"><i style="width:{{ a.pct }}%"></i></div>
+        {% if a.last_event %}<span class="muted" style="font-size:12px">Last: {{ a.last_event.message }} · {{ a.last_event.created|timesince }} ago</span>{% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="card" aria-label="Company memory" style="background:#1E1C2B;color:#EDEBF7;border-color:#1E1C2B">
+      <h2 style="font-size:20px;margin-bottom:6px">Learned rules</h2>
+      <p style="margin:0 0 8px;color:#B7ACFF;font-size:12px">Every redo reason becomes a rule the agent follows from then on.</p>
+      {% for r in rules %}<div style="display:flex;gap:8px;padding:4px 0"><span class="mono" style="color:#B7ACFF">{{ r.agent_key|upper }}</span><span>{{ r.text }}</span></div>
+      {% empty %}<p style="margin:0;font-size:13px">None yet.</p>{% endfor %}
+    </section>
+
+    <section class="card" aria-label="Activity">
+      <h2 style="font-size:20px;margin-bottom:8px">Activity</h2>
+      {% for e in events %}
+      <div style="display:flex;gap:8px;padding:4px 0;font-size:13px"><span class="mono muted" style="flex-shrink:0">{{ e.created|date:"H:i" }}</span><span class="mono" style="flex-shrink:0;color:var(--accent)">{{ e.agent_key|default:"system" }}</span><span>{{ e.message }}</span></div>
+      {% empty %}<p class="muted" style="margin:0">No activity yet.</p>{% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}

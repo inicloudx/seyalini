@@ -1,0 +1,60 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Settings · {{ tenant.name }} · Seyalini{% endblock %}
+{% block content %}
+<header><h1 style="font-size:30px">Settings</h1><p class="muted" style="margin:4px 0 0">{{ tenant.name }} · only owners see this page</p></header>
+{% for m in messages %}<div class="msg" role="status" {% if m.tags == "error" %}style="background:#FDECEC;color:#8A1C1C"{% endif %}>{{ m }}</div>{% endfor %}
+
+<section class="card form" id="ai" aria-label="AI keys">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+    <h2 style="font-size:20px">AI keys</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="section" value="test"><button class="btn">Test Gemini key</button></form>
+  </div>
+  <p class="muted" style="margin:0">Your organisation's agents use <b>your own</b> keys, so AI usage is billed to your Google account. Keys are stored encrypted and never shown in full.
+    {% if platform_keys %}<br><b>This organisation may also use the platform's keys</b> when it has none of its own.{% else %}<br>Without a Gemini key, everything runs in free sample mode.{% endif %}
+    Get a Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</p>
+  <form method="post" class="form" autocomplete="off">{% csrf_token %}<input type="hidden" name="section" value="keys">
+    {% for k in keys %}
+    <div>
+      <label for="k-{{ k.name }}">{{ k.label }}</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="k-{{ k.name }}" name="{{ k.name }}" type="password" autocomplete="new-password" style="flex:1;min-width:240px"
+               placeholder="{% if k.saved %}Saved: {{ k.saved.hint }} (leave empty to keep){% elif k.platform %}Using the platform key (add your own to replace it){% else %}Not set{% endif %}">
+        {% if k.saved %}<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin:0"><input type="checkbox" name="remove_{{ k.name }}"> remove</label>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <button class="btn primary" style="align-self:flex-start">Save keys</button>
+  </form>
+</section>
+
+<section class="card" aria-label="Team">
+  <h2 style="font-size:20px;margin-bottom:8px">Team</h2>
+  <p class="muted" style="margin:0 0 10px">Everyone logs in with their own username. <b>Owner</b>: settings, keys, apps. <b>Reviewer</b>: approves scripts and videos. <b>Viewer</b>: read only.</p>
+  {% for m in members %}
+  <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line2);flex-wrap:wrap">
+    <b style="min-width:160px">{{ m.user.username }}</b><span class="muted" style="flex:1">{{ m.user.email }}</span>
+    <form method="post" style="display:flex;gap:6px">{% csrf_token %}<input type="hidden" name="section" value="member_role"><input type="hidden" name="membership" value="{{ m.id }}">
+      <label class="muted" for="role-{{ m.id }}" style="font-size:12px;align-self:center">Role</label>
+      <select id="role-{{ m.id }}" name="role" onchange="this.form.submit()" style="height:34px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+        {% for key, label in roles.items %}<option value="{{ key }}" {% if m.role == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></form>
+    <form method="post" onsubmit="return confirm('Remove {{ m.user.username|escapejs }} from {{ tenant.name|escapejs }}?')">{% csrf_token %}<input type="hidden" name="section" value="member_remove"><input type="hidden" name="membership" value="{{ m.id }}"><button class="btn">Remove</button></form>
+  </div>
+  {% endfor %}
+  <form method="post" class="form" style="margin-top:12px;border-top:1px solid var(--line2);padding-top:12px">{% csrf_token %}<input type="hidden" name="section" value="member_add">
+    <h3 style="font-size:16px">Add a person</h3>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+      {% for f in member_form %}<div><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>{% endfor %}
+    </div>
+    <button class="btn primary" style="align-self:flex-start">Add person</button>
+  </form>
+</section>
+
+<form class="card form" method="post" aria-label="Organisation">{% csrf_token %}<input type="hidden" name="section" value="org">
+  <h2 style="font-size:20px">Organisation</h2>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+    {% for f in org_form %}<div><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>{% endfor %}
+  </div>
+  <button class="btn primary" style="align-self:flex-start">Save</button>
+</form>
+{% endblock %}
