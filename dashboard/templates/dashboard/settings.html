@@ -12,6 +12,39 @@
   <a class="btn small" href="{% url 'dashboard:advanced' %}">AI team &amp; activity →</a>
 </section>
 
+<section class="card stack" id="youtube" aria-label="YouTube">
+  <div class="row" style="justify-content:space-between"><h2>YouTube</h2>
+    {% if youtube %}<span class="pill ok">● Connected</span>{% else %}<span class="pill">Not connected</span>{% endif %}</div>
+  {% if youtube %}
+    <p style="margin:0">Approved videos post to <b>{{ youtube.channel }}</b> automatically.</p>
+    <p class="muted small" style="margin:0">They upload as <b>private</b> until Google reviews your app; switch each one to public in YouTube Studio.</p>
+    <form method="post" action="{% url 'dashboard:youtube_disconnect' %}">{% csrf_token %}<button class="btn small">Disconnect</button></form>
+  {% elif youtube_ready %}
+    <p style="margin:0">Keys saved. One last step: log in with the Google account that owns your channel.</p>
+    <a class="btn primary" href="{% url 'dashboard:youtube_connect' %}" style="align-self:flex-start">Connect YouTube channel</a>
+    <p class="muted small" style="margin:0">Google may say “hasn't verified this app”: tap Advanced → Go to Seyalini.</p>
+  {% else %}
+    <ol class="small" style="margin:0;padding-left:20px">
+      <li>In Google Cloud → Clients, create a <b>Web application</b> client with this redirect URI:<br><code style="word-break:break-all">{{ youtube_redirect }}</code></li>
+      <li>Paste its <b>client ID</b> and <b>client secret</b> below and save.</li>
+      <li>Then tap <b>Connect YouTube channel</b>.</li>
+    </ol>
+  {% endif %}
+  {% if not youtube %}
+  <details {% if not youtube_ready %}open{% endif %}>
+    <summary class="small muted">{% if youtube_ready %}Change client ID / secret ▾{% else %}Client ID and secret{% endif %}</summary>
+    <form method="post" class="form" autocomplete="off" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="section" value="keys">
+      {% for k in yt_keys %}
+      <div><label for="k-{{ k.name }}">{% if forloop.first %}Client ID{% else %}Client secret{% endif %}</label>
+        <input id="k-{{ k.name }}" name="{{ k.name }}" type="password" autocomplete="new-password"
+               placeholder="{% if k.saved %}Saved: {{ k.saved.hint }} (leave empty to keep){% else %}Paste here{% endif %}"></div>
+      {% endfor %}
+      <button class="btn" style="align-self:flex-start">Save</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
 <section class="card form" id="ai" aria-label="AI keys">
   <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
     <h2>AI keys</h2>

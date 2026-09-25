@@ -1,10 +1,13 @@
-# Tenant 1. A new customer = copy this folder, change the values.
+# Organisation settings. Edited from the dashboard Settings page.
 slug: inixr
 name: INIXR Technology
-theme:                     # white-label: the dashboard uses these
-  accent: "#C2410C"
+theme:
+  accent: '#C2410C'
   logo_text: IX
 settings:
-  use_platform_keys: true   # INIXR may use the API keys in .env; other organisations bring their own
+  use_platform_keys: true
   timezone: Asia/Kolkata
   owner_name: Nithy
+  youtube:
+    channel: Ini Cloudx
+    channel_id: UCY0Lgb-1bjawkAwLBHlJ8kw

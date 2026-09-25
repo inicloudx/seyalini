@@ -1,4 +1,5 @@
 """Organisation settings (owner), platform admin (you), optional self sign-up."""
+import secrets as secrets_mod
 from pathlib import Path
 
 import yaml
@@ -11,6 +12,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from core.models import Membership, Product, TenantSecret, Tenant
@@ -113,6 +115,8 @@ def settings_home(request):
                 (messages.success if ok else messages.error)(request, msg)
             else:
                 messages.success(request, msg)
+            if any("YOUTUBE_" in c for c in changed):
+                return redirect(reverse("dashboard:settings") + "#youtube")
             return redirect("dashboard:settings")
         elif section == "test":
             key = get_secret(t, "GEMINI_API_KEY")
@@ -160,12 +164,84 @@ def settings_home(request):
 
     saved = {s.name: s for s in TenantSecret.objects.filter(tenant=t)}
     keys = [{"name": n, "label": label, "saved": saved.get(n), "platform": uses_platform_keys(t) and not saved.get(n) and bool(get_secret(t, n))}
-            for n, label in KNOWN.items()]
+            for n, label in KNOWN.items() if not n.startswith("YOUTUBE_")]
+    yt_keys = [{"name": n, "label": label, "saved": saved.get(n)} for n, label in KNOWN.items() if n.startswith("YOUTUBE_")]
     return render(request, "dashboard/settings.html", {
         "org_form": org_form, "member_form": member_form, "keys": keys,
         "members": Membership.objects.filter(tenant=t).select_related("user").order_by("user__username"),
         "roles": LABELS, "platform_keys": uses_platform_keys(t),
+        "youtube": (t.settings or {}).get("youtube"), "yt_keys": yt_keys,
+        "youtube_ready": bool(get_secret(t, "YOUTUBE_CLIENT_ID") and get_secret(t, "YOUTUBE_CLIENT_SECRET")),
+        "youtube_redirect": _yt_redirect(request),
     })
+
+
+# --- YouTube channel connection ---------------------------------------------------------
+def _yt_redirect(request):
+    return request.build_absolute_uri(reverse("dashboard:youtube_callback"))
+
+
+@login_required
+@require_role("owner")
+def youtube_connect(request):
+    from tools import youtube
+
+    t = request.tenant
+    cid, secret = get_secret(t, "YOUTUBE_CLIENT_ID"), get_secret(t, "YOUTUBE_CLIENT_SECRET")
+    if not (cid and secret):
+        messages.error(request, "Add the YouTube client ID and client secret under AI keys first.")
+        return redirect(reverse("dashboard:settings") + "#youtube")
+    state = secrets_mod.token_urlsafe(24)
+    request.session["yt_state"] = state
+    return redirect(youtube.auth_url(cid, _yt_redirect(request), state))
+
+
+@login_required
+@require_role("owner")
+def youtube_callback(request):
+    from tools import youtube
+
+    t = request.tenant
+    back = reverse("dashboard:settings") + "#youtube"
+    if request.GET.get("error"):
+        messages.error(request, f"YouTube connection cancelled ({request.GET['error']}).")
+        return redirect(back)
+    if not request.GET.get("state") or request.GET.get("state") != request.session.pop("yt_state", None):
+        messages.error(request, "That login link expired. Tap “Connect YouTube channel” again.")
+        return redirect(back)
+    cid, secret = get_secret(t, "YOUTUBE_CLIENT_ID"), get_secret(t, "YOUTUBE_CLIENT_SECRET")
+    try:
+        tokens = youtube.exchange_code(cid, secret, request.GET.get("code", ""), _yt_redirect(request))
+        refresh = tokens.get("refresh_token")
+        if not refresh:
+            raise youtube.YouTubeError("Google sent no refresh token. Remove Seyalini at myaccount.google.com/permissions and connect again.")
+        channel = youtube.my_channel(tokens["access_token"])
+    except Exception as exc:
+        messages.error(request, f"Could not connect YouTube: {str(exc)[:250]}")
+        return redirect(back)
+    set_secret(t, "YOUTUBE_REFRESH_TOKEN", refresh)
+    sett = dict(t.settings or {})
+    sett["youtube"] = {"channel": channel["title"], "channel_id": channel["id"]}
+    t.settings = sett
+    t.save(update_fields=["settings"])
+    _write_tenant_file(t)
+    messages.success(request, f"Connected to the YouTube channel “{channel['title']}”. Approved videos now post there automatically.")
+    return redirect(back)
+
+
+@login_required
+@require_role("owner")
+@require_POST
+def youtube_disconnect(request):
+    t = request.tenant
+    set_secret(t, "YOUTUBE_REFRESH_TOKEN", "")
+    sett = dict(t.settings or {})
+    sett.pop("youtube", None)
+    t.settings = sett
+    t.save(update_fields=["settings"])
+    _write_tenant_file(t)
+    messages.success(request, "YouTube disconnected. Nothing will be posted until you connect again.")
+    return redirect(reverse("dashboard:settings") + "#youtube")
 
 
 # --- platform admin (only you) -----------------------------------------------------------

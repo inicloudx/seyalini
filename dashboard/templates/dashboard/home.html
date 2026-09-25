@@ -98,7 +98,7 @@
           <button class="btn small" name="action" value="hide">Remove</button>
         </form>{% endif %}
         {% else %}
-        <span class="small muted">{{ f.note }}{% if f.task %} <a href="#task-{{ f.task.id }}">Check now ↓</a>{% endif %}</span>
+        <span class="small muted">{{ f.note }}{% if f.task %} <a href="#task-{{ f.task.id }}">Check now ↓</a>{% endif %}{% if f.youtube_url %} <a href="{{ f.youtube_url }}" target="_blank" rel="noopener">Open on YouTube ↗</a>{% endif %}</span>
         {% endif %}
       </div>
       {% endfor %}

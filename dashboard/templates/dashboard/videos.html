@@ -17,6 +17,12 @@
     <b class="small">{{ v.result.title|cut:"[Sample] "|truncatechars:60 }}</b>
     <span class="muted small">{{ v.product.name }} · {{ v.updated|date:"j M" }}</span>
     <span class="muted small">{{ v.mb }} MB</span>
+    {% if v.pub and v.pub.status == "done" %}
+      {% if v.pub.result.url %}<a class="small" href="{{ v.pub.result.url }}" target="_blank" rel="noopener">▶ On YouTube ({{ v.pub.result.privacy }}) ↗</a>{% else %}<span class="pill ok small" style="align-self:flex-start">Posted (practice)</span>{% endif %}
+    {% elif v.pub and v.pub.status == "running" %}<span class="pill info" style="align-self:flex-start">Uploading…</span>
+    {% elif youtube_on and can_review %}
+      <form method="post" action="{% url 'dashboard:video_publish' v.id %}">{% csrf_token %}<button class="btn small wide">{% if v.pub %}↻ Retry YouTube{% else %}Post to YouTube{% endif %}</button></form>
+    {% endif %}
     <div class="row" style="gap:6px;flex-wrap:nowrap">
       <a class="btn small" style="flex:1" href="/media/{{ v.result.video }}" download>Download</a>
       {% if can_review %}<form method="post" action="{% url 'dashboard:video_delete' v.id %}" onsubmit="return confirm('Delete this video from your disk? Download it first if you want to keep a copy.')">{% csrf_token %}<button class="btn small" aria-label="Delete video" title="Delete" style="color:var(--bad)">Delete</button></form>{% endif %}
@@ -29,5 +35,5 @@
   </div>
   {% endfor %}
 </div>
-<p class="muted small">Automatic posting to YouTube, Instagram and Facebook is coming next.</p>
+<p class="muted small">{% if youtube_on %}Approved videos post to YouTube automatically. Instagram and Facebook are next.{% else %}<a href="{% url 'dashboard:settings' %}#youtube">Connect YouTube</a> and approved videos post automatically.{% endif %}</p>
 {% endblock %}

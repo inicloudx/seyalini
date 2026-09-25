@@ -1,0 +1,11 @@
+# Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
+key: publisher
+name: Publisher
+role: Posts approved Shorts to YouTube (then Instagram and Facebook)
+status: active
+autonomy: 2                 # posts only what you approved
+model: gemini/gemini-3.5-flash-lite
+monthly_budget_usd: 0       # posting through the platform APIs is free
+changelog: YouTube Shorts upload
+config:
+  youtube_privacy: private  # Google keeps uploads from unreviewed apps private anyway; switch to public after the audit

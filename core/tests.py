@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from agents.marketing.script_writer import write_script
 from agents.runtime import BudgetExceeded
 from core.loader import load_all, sync_agent
-from core.models import AgentCard, Event, Product, Rule, Task, Tenant
+from core.models import AgentCard, Approval, Event, Product, Rule, Task, Tenant
 
 
 TMP_MEDIA = tempfile.mkdtemp(prefix="seyalini-test-media-")
@@ -26,7 +26,7 @@ class FoundationTests(TestCase):
 
     def test_tenant_loaded_with_brief_and_agents(self):
         self.assertIn("AlphaMagic", self.product.brief)
-        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 4)
+        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 5)
 
     def test_agent_change_creates_new_version_and_keeps_old(self):
         card, change = sync_agent(self.tenant, {"key": "marketing", "name": "Marketing", "status": "active",
@@ -455,7 +455,7 @@ class MultiTenantTests(TestCase):
     def test_new_org_gets_owner_and_default_team(self):
         tenant, owner = self._make_org()
         self.assertEqual(tenant.memberships.get(user=owner).role, "owner")
-        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 4)
+        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 5)
         self.assertTrue(AgentCard.objects.get(tenant=tenant, key="marketing").status == "active")
 
     def test_orgs_cannot_see_each_other(self):
@@ -620,3 +620,62 @@ class VideoDeleteTests(TestCase):
         self.assertContains(self.client.get("/videos/"), "Free up space")
         self.client.post("/videos/cleanup/")
         self.assertFalse(self.folder.exists())
+
+
+@override_settings(LLM_DRY_RUN=False, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class PublisherTests(TestCase):
+    """Approving a video posts it to YouTube (the real API is replaced by a fake here)."""
+
+    def setUp(self):
+        from core.secrets import set_secret
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+        for k, v in {"GEMINI_API_KEY": "g-key-123456", "YOUTUBE_CLIENT_ID": "cid", "YOUTUBE_CLIENT_SECRET": "sec",
+                     "YOUTUBE_REFRESH_TOKEN": "refresh-123456"}.items():
+            set_secret(self.tenant, k, v)
+        folder = Path(TMP_MEDIA) / "videos" / "inixr" / "t"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "final.mp4").write_bytes(b"fake")
+        self.video = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing",
+                                         kind="short_video", title="Video: B for Boat", status="awaiting_approval",
+                                         result={"title": "B for Boat", "video": "videos/inixr/t/final.mp4",
+                                                 "caption": "Boats float!", "hashtags": ["#ABC", "#Kids"]})
+        Approval.objects.create(tenant=self.tenant, task=self.video)
+
+    def test_approving_a_video_uploads_it(self):
+        from unittest import mock
+
+        from tools import youtube
+
+        with mock.patch.object(youtube, "access_token", return_value="tok"), \
+             mock.patch.object(youtube, "upload", return_value="abc123") as up, \
+             self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{self.video.id}/decide/", {"decision": "approved"})
+        pub = Task.objects.get(kind="publish_youtube")
+        self.assertEqual(pub.status, "done")
+        self.assertEqual(pub.result["url"], "https://youtube.com/shorts/abc123")
+        kwargs = up.call_args.kwargs
+        self.assertEqual(kwargs["privacy"], "private")
+        self.assertTrue(kwargs["made_for_kids"])
+        self.assertIn("play.google.com", kwargs["description"])
+        self.assertIn("#Shorts", kwargs["description"])
+        self.assertContains(self.client.get("/videos/"), "On YouTube")
+
+    def test_not_connected_means_no_upload(self):
+        from core.secrets import set_secret
+
+        set_secret(self.tenant, "YOUTUBE_REFRESH_TOKEN", "")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{self.video.id}/decide/", {"decision": "approved"})
+        self.assertFalse(Task.objects.filter(kind="publish_youtube").exists())
+
+    def test_settings_shows_connect_steps(self):
+        page = self.client.get("/settings/").content.decode()
+        self.assertIn("Connect YouTube channel", page)
+        from core.secrets import set_secret
+        set_secret(self.tenant, "YOUTUBE_CLIENT_ID", "")
+        self.assertContains(self.client.get("/settings/"), "/settings/youtube/callback/")

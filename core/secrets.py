@@ -17,6 +17,8 @@ KNOWN = {
     "GEMINI_API_KEY": "Gemini API key (scripts, briefs, images, Veo video)",
     "OPENAI_API_KEY": "OpenAI API key (optional)",
     "ANTHROPIC_API_KEY": "Anthropic API key (optional)",
+    "YOUTUBE_CLIENT_ID": "YouTube OAuth client ID (Google Cloud → Clients)",
+    "YOUTUBE_CLIENT_SECRET": "YouTube OAuth client secret",
     "TELEGRAM_BOT_TOKEN": "Telegram bot token (optional, notifications)",
     "TELEGRAM_CHAT_ID": "Telegram chat id (optional)",
 }

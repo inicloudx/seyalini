@@ -142,11 +142,24 @@ def _flow(root):
             state[2], note = "working", "Remaking the video with your feedback…"
         else:
             state = ["done"] * 5
-            note = "Ready to post."
+            pub = Task.objects.filter(parent=cur, kind="publish_youtube").order_by("-id").first()
+            if pub is None:
+                note = "Approved. Connect YouTube in Settings to post it automatically."
+            elif pub.status == "running":
+                note = "Uploading to YouTube…"
+            elif pub.status == "failed":
+                note = f"YouTube upload failed: {str(pub.result.get('error', ''))[:120]}"
+            elif pub.result.get("practice"):
+                note = "Posted to YouTube (practice mode, nothing really uploaded)."
+            else:
+                note = f"Posted to YouTube ({pub.result.get('privacy', 'private')})."
+                task_for_you = None
+            cur.youtube_url = (pub.result or {}).get("url") if pub else None
     title = cur.result.get("title") or root.result.get("title") or root.title
     return {"id": root.id, "title": str(title).replace("[Sample] ", ""), "product": root.product,
             "steps": list(zip(STEPS, state)), "note": note, "task": task_for_you, "latest": cur,
-            "done": state[-1] == "done", "failed": "failed" in state, "created": root.created}
+            "done": state[-1] == "done", "failed": "failed" in state, "created": root.created,
+            "youtube_url": getattr(cur, "youtube_url", None)}
 
 
 @login_required
@@ -318,8 +331,11 @@ def videos(request):
     qs = (Task.objects.filter(tenant=request.tenant, kind="short_video").exclude(product__status="archived")
           .select_related("product").order_by("-updated"))
     ready = [v for v in qs.filter(status="approved")[:60] if not (v.result or {}).get("deleted")]
+    from agents.publisher.youtube_publisher import is_connected
+
     for v in ready:
         v.mb = _folder_mb(_video_dir(v))
+        v.pub = Task.objects.filter(parent=v, kind="publish_youtube").order_by("-id").first()
     # rejected, failed and replaced versions still on disk
     leftovers = [v for v in qs.exclude(status__in=["approved", "awaiting_approval", "running"])
                  if not (v.result or {}).get("deleted") and _video_dir(v).exists()]
@@ -327,6 +343,7 @@ def videos(request):
         "ready": ready,
         "waiting": qs.filter(status="awaiting_approval")[:12],
         "leftovers": len(leftovers),
+        "youtube_on": is_connected(request.tenant) or is_dry_run(request.tenant),
         "leftover_mb": round(sum(_folder_mb(_video_dir(v)) for v in leftovers), 1),
     })
 
@@ -361,6 +378,18 @@ def video_delete(request, task_id):
     mb = _folder_mb(_video_dir(task))
     _delete_video_files(task)
     messages.success(request, f"Deleted “{str((task.result or {}).get('title') or task.title)[:60]}” ({mb} MB freed).")
+    return redirect("dashboard:videos")
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def video_publish(request, task_id):
+    from agents.publisher.tasks import publish_video
+
+    task = get_object_or_404(Task, id=task_id, tenant=request.tenant, kind="short_video", status="approved")
+    enqueue(publish_video, task.id)
+    messages.success(request, "Posting to YouTube. It takes about a minute.")
     return redirect("dashboard:videos")
 
 

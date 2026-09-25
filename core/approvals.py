@@ -53,11 +53,13 @@ def decide(task: Task, user, decision: str, reason: str = "") -> Task:
     task.save()
 
     from agents.marketing import tasks as mt
+    from agents.publisher import tasks as pt
 
     follow_up = {
         ("short_script", "approved"): mt.make_video,
         ("short_script", "redo"): mt.rewrite_script,
         ("short_video", "redo"): mt.remake_video,
+        ("short_video", "approved"): pt.publish_video,
     }.get((task.kind, decision))
     if follow_up is not None:
         transaction.on_commit(lambda: enqueue(follow_up, task.id))
