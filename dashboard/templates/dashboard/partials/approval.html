@@ -12,7 +12,7 @@
   </video>
   <p style="margin:0">{{ s.caption }}</p>
   <details><summary class="small muted">Details ▾</summary>
-    <p class="small muted" style="margin:8px 0 0">{{ s.seconds|floatformat:0 }} seconds · {{ s.hashtags|join:" " }}{% if not s.music %} · no music yet{% endif %}</p>
+    <p class="small muted" style="margin:8px 0 0">{{ s.seconds|floatformat:0 }} seconds · {{ s.hashtags|join:" " }}{% if s.voice %} · voice-over{% else %} · no voice{% endif %}{% if not s.music %} · no music yet{% endif %}</p>
     <a class="small" href="/media/{{ s.video }}" download>Download video</a>
   </details>
   {% else %}

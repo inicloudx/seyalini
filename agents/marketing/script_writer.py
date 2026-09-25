@@ -25,6 +25,8 @@ Hard rules:
   no real children's faces, no characters or logos owned by other companies.
 - Every scene has a `veo_prompt`: a vivid, self-contained video-generation prompt
   (subject, action, setting, camera, lighting, style). No text inside the video; text goes in `on_screen_text`.
+- Every scene has a `voiceover`: what a warm narrator SAYS in that scene, at most 16 words so it fits in 8 seconds.
+  Spoken words only (no stage directions, no emojis). The last scene's voiceover invites parents to download the app.
 - End with a call to action to download the app.
 - Follow the brand brief and EVERY learned rule below.
 

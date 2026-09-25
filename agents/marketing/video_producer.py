@@ -15,7 +15,7 @@ from django.conf import settings
 
 from agents.runtime import AgentRuntime
 from core.models import Approval, Task
-from tools import editor, imagegen, telegram, veo
+from tools import editor, imagegen, telegram, tts, veo
 from tools.fonts import use_brand_fonts
 
 DEFAULTS = {
@@ -27,6 +27,10 @@ DEFAULTS = {
     "veo_resolution": "720p",
     "end_card_seconds": 3,
     "library_pillars": ["watch_the_magic"],
+    "voiceover": True,
+    "tts_model": "gemini-3.8-flash-lite-tts",
+    "voice": "Kore",
+    "tts_usd": 0.002,          # per scene, about $0.006 per Short
 }
 STYLE = ("Vertical 9:16 frame. Bright, colourful, friendly 3D animated style for young children, soft lighting, "
          "clean composition with empty space in the lower third for captions. No written text, no logos, no real people.")
@@ -126,7 +130,19 @@ def produce_video(script_task: Task, redo_of: Task | None = None) -> Task:
                 src = imagegen.generate(prompt, out_dir / f"scene{i}.png", model=cfg["image_model"], dry_run=dry, api_key=gemini_key,
                                         label=f"Scene {i + 1} ({kind}): {sc.get('on_screen_text', '')}", accent=accent)
                 agent.spend("image_gen", f"Scene {i + 1}: image" + (" (dry run)" if dry else ""), 0 if dry else cfg["image_usd"], task=task)
-            scenes.append(editor.Scene(Path(src), secs, sc.get("on_screen_text", "")))
+            voice = None
+            line = (sc.get("voiceover") or "").strip()
+            if cfg["voiceover"] and line:
+                try:
+                    if dry:
+                        voice = tts.silence_placeholder(out_dir / f"voice{i}.wav", 1.0)
+                    else:
+                        voice = tts.generate(line, out_dir / f"voice{i}.wav", api_key=gemini_key,
+                                             model=cfg["tts_model"], voice=cfg["voice"])
+                        agent.spend("voice_gen", f"Scene {i + 1}: voice-over", cfg["tts_usd"], task=task)
+                except Exception as exc:  # a missing voice never loses the Short
+                    agent.log("voice_failed", f"Scene {i + 1}: no voice-over ({str(exc)[:160]})", task=task)
+            scenes.append(editor.Scene(Path(src), secs, sc.get("on_screen_text", ""), voice))
 
         logo = next((p for p in (assets / "logo.png", assets / "logo.jpg") if p.exists()), None)
         info = editor.render(
@@ -143,7 +159,7 @@ def produce_video(script_task: Task, redo_of: Task | None = None) -> Task:
 
     rel = lambda p: str(Path(p).relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
     task.result = {"title": script.get("title"), "video": rel(out_dir / "final.mp4"), "thumbnail": rel(info["thumbnail"]),
-                   "seconds": info["seconds"], "music": info["music"], "caption": script.get("caption"),
+                   "seconds": info["seconds"], "music": info["music"], "voice": info.get("voice", False), "caption": script.get("caption"),
                    "hashtags": script.get("hashtags", []), "sources": kinds}
     task.status = "awaiting_approval"
     task.save()

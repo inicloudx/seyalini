@@ -4,7 +4,7 @@ Uses the ffmpeg that ships inside the `imageio-ffmpeg` pip package, so nothing
 extra has to be installed on Windows, Mac or Linux.
 - still images get a slow zoom (Ken Burns) so they feel alive
 - on-screen text, a logo badge and an end card are drawn with Pillow
-- optional background music from the product's assets/music folder
+- a spoken voice-over per scene (Gemini TTS), optional background music from assets/music
 """
 import random
 import subprocess
@@ -24,6 +24,7 @@ class Scene:
     source: Path          # .png/.jpg image or .mp4 clip
     seconds: float
     text: str = ""
+    voice: Path | None = None   # voice-over WAV for this scene
 
 
 def ffmpeg(*args, cwd: Path | None = None):
@@ -156,16 +157,35 @@ def render(scenes: list[Scene], out: Path, *, badge: str, accent: str, app_name:
     total = sum(s.seconds for s in scenes) + end_seconds
     music = _pick_music(music_dir)
     fade = max(0.0, total - 1.5)
+    inputs, labels, filters = ["-i", silent], [], []
+    start = 0.0
+    for sc in scenes:  # each scene's voice-over starts with its scene and never runs into the next one
+        if sc.voice and Path(sc.voice).exists():
+            idx = len(inputs) // 2
+            inputs += ["-i", sc.voice]
+            ms = int(start * 1000)
+            filters.append(f"[{idx}:a]aresample=44100,aformat=channel_layouts=stereo,atrim=0:{sc.seconds},"
+                           f"adelay={ms}|{ms},volume=1.6[v{idx}]")
+            labels.append(f"[v{idx}]")
+        start += sc.seconds
     if music:
-        ffmpeg("-i", silent, "-stream_loop", "-1", "-i", music, "-map", "0:v", "-map", "1:a",
-               "-af", f"volume=0.6,afade=t=in:d=0.5,afade=t=out:st={fade}:d=1.5",
+        idx = len(inputs) // 2
+        inputs += ["-stream_loop", "-1", "-i", music]
+        vol = 0.18 if labels else 0.6  # music sits under the voice
+        filters.append(f"[{idx}:a]aresample=44100,aformat=channel_layouts=stereo,volume={vol},"
+                       f"afade=t=in:d=0.5,afade=t=out:st={fade}:d=1.5[m]")
+        labels.append("[m]")
+    if labels:
+        mix = "".join(labels) + f"amix=inputs={len(labels)}:normalize=0:duration=longest,apad[a]"
+        ffmpeg(*inputs, "-filter_complex", ";".join(filters + [mix]), "-map", "0:v", "-map", "[a]",
                "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-t", total, "-movflags", "+faststart", out)
     else:
         ffmpeg("-i", silent, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-map", "0:v", "-map", "1:a",
                "-c:v", "copy", "-c:a", "aac", "-t", total, "-movflags", "+faststart", out)
     thumb = out.with_name("thumb.jpg")
     ffmpeg("-ss", "1", "-i", out, "-frames:v", "1", "-q:v", "3", thumb)
-    return {"seconds": total, "music": music.name if music else None, "thumbnail": thumb}
+    return {"seconds": total, "music": music.name if music else None, "thumbnail": thumb,
+            "voice": any(sc.voice for sc in scenes)}
 
 
 def _transparent(path: Path) -> Path:
