@@ -3,6 +3,6 @@ name: Manager
 role: Runs today - turns goals into tasks, reviews output, weekly report
 status: planned
 autonomy: 2
-model: gemini/gemini-2.5-flash
+model: gemini/gemini-3.5-flash-lite
 monthly_budget_usd: 2
 changelog: Default card for a new organisation

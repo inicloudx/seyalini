@@ -1,16 +1,13 @@
-<article id="task-{{ task.id }}" style="border-top:1px solid var(--line2);padding:12px 0">
-  {% if task.kind == "short_video" %}
-    {% if task.status == "approved" %}
-    <span class="pill" style="color:var(--ok)">Approved</span> {{ task.result.title }} is ready to publish. Automatic upload comes in Step 5; for now, download it from “Ready to publish”.
-    {% else %}
-    <span class="pill" style="color:var(--warn)">Redo</span> The video is being remade{% if task.approval.reason %} with your note: “{{ task.approval.reason }}”{% endif %}.
-    {% endif %}
+<article class="card stack" id="task-{{ task.id }}" role="status">
+  {% if task.status == "approved" %}
+    <span class="pill ok" style="align-self:flex-start">✓ Approved</span>
+    <p style="margin:0">{% if task.kind == "short_video" %}<b>{{ task.result.title|cut:"[Sample] " }}</b> is ready. Find it in <a href="{% url 'dashboard:videos' %}">Videos</a>.{% else %}Great, the AI is now making the video. It appears here in 1–2 minutes.{% endif %}</p>
+  {% elif task.approval.decision == "discarded" %}
+    <span class="pill bad" style="align-self:flex-start">✕ Rejected</span>
+    <p style="margin:0">Thrown away. It won't be posted{% if task.approval.reason %}, and the AI will avoid: “{{ task.approval.reason }}”{% endif %}. Tap ＋ New Short for a fresh one.</p>
   {% else %}
-    {% if task.status == "approved" %}
-    <span class="pill" style="color:var(--ok)">Approved</span> {{ task.result.title }}: the video is being made now. It shows up here when it's ready.
-    {% else %}
-    <span class="pill" style="color:var(--warn)">Redo</span> {{ task.result.title }}: the agent is rewriting it{% if task.approval.reason %} and learned “{{ task.approval.reason }}”{% endif %}.
-    {% endif %}
+    <span class="pill warn" style="align-self:flex-start">↻ Redoing</span>
+    <p style="margin:0">The AI is making a new version{% if task.approval.reason %} and will remember: “{{ task.approval.reason }}”{% endif %}.</p>
   {% endif %}
   <div hx-get="{% url 'dashboard:running' %}" hx-trigger="load delay:1s" hx-target="#running" hx-swap="outerHTML"></div>
 </article>

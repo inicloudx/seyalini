@@ -4,7 +4,7 @@ from django import forms
 class AppForm(forms.Form):
     name = forms.CharField(label="App name", max_length=120)
     store_url = forms.CharField(label="Google Play link", required=False,
-                                help_text="The agent reads the listing and looks at your screenshots.",
+                                help_text="The AI reads the page and looks at your screenshots.",
                                 widget=forms.URLInput(attrs={"placeholder": "https://play.google.com/store/apps/details?id=com.your.app"}))
     what_it_does = forms.CharField(label="What happens in the app?", widget=forms.Textarea(attrs={"rows": 4,
                                    "placeholder": "e.g. The child points the phone at a letter card and a 3D animal jumps out, says its name..."}))
@@ -19,7 +19,7 @@ class AppForm(forms.Form):
     brand_colour = forms.CharField(label="Brand colour", required=False, initial="#C2410C",
                                    widget=forms.TextInput(attrs={"type": "color"}))
     logo = forms.ImageField(label="Logo (PNG)", required=False)
-    extra = forms.CharField(label="Anything else the agent should know?", required=False,
+    extra = forms.CharField(label="Anything else the AI should know?", required=False,
                             widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Things to always/never say, competitors, seasonal plans..."}))
     confirm_new = forms.BooleanField(label="Yes, this is a different app", required=False)
 

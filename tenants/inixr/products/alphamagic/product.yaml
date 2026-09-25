@@ -15,7 +15,7 @@ config:
   - instagram_reels
   - facebook_reels
   youtube_made_for_kids: true
-  shorts_per_day: 2
+  shorts_per_day: 1
   topic_repeat_days: 7
   pillars:
   - key: letter_of_the_day

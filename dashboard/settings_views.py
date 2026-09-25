@@ -67,7 +67,7 @@ def _test_gemini(key: str) -> tuple[bool, str]:
     try:
         from google import genai
 
-        text = genai.Client(api_key=key).models.generate_content(model="gemini-2.5-flash", contents="Reply with the word OK").text
+        text = genai.Client(api_key=key).models.generate_content(model="gemini-3.5-flash-lite", contents="Reply with the word OK").text
         return True, f"The key works (the model answered “{(text or '').strip()[:20]}”)."
     except Exception as exc:
         return False, f"The key did not work: {str(exc)[:200]}"

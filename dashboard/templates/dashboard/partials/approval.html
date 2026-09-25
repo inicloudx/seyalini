@@ -1,59 +1,53 @@
-{% load static %}{% with s=task.result %}
-<article id="task-{{ task.id }}" style="border-top:1px solid var(--line2);padding:14px 0;display:flex;flex-direction:column;gap:10px">
-  <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap">
-    <span style="font-size:12px;font-weight:600;color:{% if task.kind == 'short_video' %}var(--info){% else %}var(--accent){% endif %};text-transform:uppercase;letter-spacing:.06em">
-      {% if task.kind == "short_video" %}Video{% else %}Script{% endif %} · {{ task.product.name }}{% if task.payload.pillar_name %} · {{ task.payload.pillar_name }}{% endif %}{% if task.parent and task.parent.kind == task.kind %} · redo{% endif %}
-    </span>
-    <span class="muted mono">#{{ task.id }} · {{ task.created|timesince }} ago</span>
+{% with s=task.result %}
+<article class="card stack" id="task-{{ task.id }}">
+  <div class="row" style="justify-content:space-between;gap:6px">
+    <span class="pill {% if task.kind == 'short_video' %}info{% else %}warn{% endif %}">{% if task.kind == "short_video" %}Video to check{% else %}Script to check{% endif %}{% if task.parent and task.parent.kind == task.kind %} · new version{% endif %}</span>
+    <span class="muted small">{{ task.product.name }} · {{ task.created|timesince }} ago</span>
   </div>
-  <h3 style="font-size:18px">{{ s.title }}</h3>
+  <h3>{{ s.title|cut:"[Sample] " }}</h3>
 
   {% if task.kind == "short_video" %}
-  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-    <video controls playsinline preload="metadata" poster="/media/{{ s.thumbnail }}" style="width:240px;aspect-ratio:9/16;border-radius:10px;background:#000">
-      <source src="/media/{{ s.video }}" type="video/mp4">
-    </video>
-    <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px">
-      <span class="mono muted">{{ s.seconds|floatformat:0 }} s · 1080×1920 · {{ task.payload.mode }} mode · ~${{ task.payload.estimate_usd|floatformat:2 }}</span>
-      <span class="muted">Scenes from: {{ s.sources|join:", " }}{% if s.music %} · music: {{ s.music }}{% else %} · no music yet (add files to assets/music){% endif %}</span>
-      <p style="margin:4px 0"><b>Caption:</b> {{ s.caption }}</p>
-      <p style="margin:0" class="mono">{{ s.hashtags|join:" " }}</p>
-      <a href="/media/{{ s.video }}" download>Download MP4</a>
-    </div>
-  </div>
+  <video controls playsinline preload="metadata" poster="/media/{{ s.thumbnail }}" style="width:100%;max-width:340px;aspect-ratio:9/16;border-radius:14px;background:#000;align-self:center">
+    <source src="/media/{{ s.video }}" type="video/mp4">
+  </video>
+  <p style="margin:0">{{ s.caption }}</p>
+  <details><summary class="small muted">Details ▾</summary>
+    <p class="small muted" style="margin:8px 0 0">{{ s.seconds|floatformat:0 }} seconds · {{ s.hashtags|join:" " }}{% if not s.music %} · no music yet{% endif %}</p>
+    <a class="small" href="/media/{{ s.video }}" download>Download video</a>
+  </details>
   {% else %}
-  <div><b>Hook:</b> {{ s.hook }}</div>
-  <details>
-    <summary style="cursor:pointer;font-weight:500">Scenes ({{ s.scenes|length }}), caption and video prompts</summary>
-    <ol style="margin:8px 0;padding-left:20px;display:flex;flex-direction:column;gap:8px">
-      {% for sc in s.scenes %}
-      <li><b>{{ sc.on_screen_text }}</b> <span class="muted">({{ sc.seconds }} s)</span><br>
-        <span class="muted">Voice:</span> {{ sc.voiceover }}<br>
-        <span class="mono muted">Video prompt: {{ sc.veo_prompt }}</span></li>
-      {% endfor %}
-    </ol>
-    <p style="margin:4px 0"><b>End card:</b> {{ s.end_card }}</p>
-    <p style="margin:4px 0"><b>Caption:</b> {{ s.caption }}</p>
-    <p style="margin:4px 0" class="mono">{{ s.hashtags|join:" " }}</p>
-    <p style="margin:4px 0" class="muted">Music: {{ s.music_mood }}</p>
+  <blockquote style="margin:0;padding:12px 14px;border-left:4px solid var(--accent);background:var(--panel2);border-radius:0 12px 12px 0;font-size:17px;font-weight:600">“{{ s.hook }}”</blockquote>
+  <ol style="margin:0;padding-left:20px" class="stack small">
+    {% for sc in s.scenes %}<li style="margin:0">{{ sc.on_screen_text }}</li>{% endfor %}
+  </ol>
+  <details><summary class="small muted">See full script ▾</summary>
+    <div class="stack small" style="margin-top:8px;gap:8px">
+      {% for sc in s.scenes %}<div><b>Scene {{ forloop.counter }}</b> · {{ sc.voiceover }}<br><span class="muted">Picture: {{ sc.veo_prompt }}</span></div>{% endfor %}
+      <div><b>Caption:</b> {{ s.caption }}</div><div class="muted">{{ s.hashtags|join:" " }}</div>
+    </div>
   </details>
   {% endif %}
 
   {% if can_review %}
   <form hx-post="{% url 'dashboard:decide' task.id %}" hx-target="#task-{{ task.id }}" hx-swap="outerHTML" hx-disabled-elt="find button"
-        method="post" action="{% url 'dashboard:decide' task.id %}" style="display:flex;flex-direction:column;gap:8px">
+        method="post" action="{% url 'dashboard:decide' task.id %}" class="stack">
     {% csrf_token %}
-    <fieldset style="border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px">
-      <legend class="muted" style="font-size:12px;margin-bottom:6px">If redo, why? (becomes a rule)</legend>
-      {% for c in task.chips %}<label class="pill" style="cursor:pointer;font-weight:500;padding:6px 10px"><input type="radio" name="chip" value="{{ c }}" style="margin:0"> {{ c }}</label>{% endfor %}
-    </fieldset>
-    <label class="muted" style="font-size:12px" for="reason-{{ task.id }}">Or write your own reason</label>
-    <input id="reason-{{ task.id }}" name="reason" placeholder="{% if task.kind == 'short_video' %}e.g. Make the bear cuter and rounder{% else %}e.g. Use a jungle setting, not a table{% endif %}" style="height:38px;border:1px solid var(--line);border-radius:7px;padding:0 10px;background:var(--panel);color:var(--ink);font:inherit">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn primary" name="decision" value="approved">{% if task.kind == "short_video" %}Approve video{% else %}Approve → make video{% endif %}</button>
-      <button class="btn" name="decision" value="redo">Redo with reason</button>
-    </div>
+    <button class="btn good wide" name="decision" value="approved">{% if task.kind == "short_video" %}✓ Approve video{% else %}✓ Approve → make video{% endif %}</button>
+    <details>
+      <summary class="btn wide" style="display:flex">Change something</summary>
+      <div class="stack" style="margin-top:10px">
+        <fieldset style="border:0;padding:0;margin:0" class="row">
+          <legend class="small muted" style="margin-bottom:6px">What should change? The AI remembers this.</legend>
+          {% for c in task.chips %}<label class="chip"><input type="radio" name="chip" value="{{ c }}"> {{ c }}</label>{% endfor %}
+        </fieldset>
+        <label class="small muted" for="reason-{{ task.id }}">Or say it in your words</label>
+        <input id="reason-{{ task.id }}" name="reason" placeholder="{% if task.kind == 'short_video' %}e.g. Make the aeroplane bigger and brighter{% else %}e.g. Start with a question to parents{% endif %}" style="min-height:48px;border:1px solid var(--line);border-radius:12px;padding:0 14px;background:var(--panel);color:var(--ink);font:inherit">
+        <button class="btn primary wide" name="decision" value="redo">Send to AI to redo</button>
+      </div>
+    </details>
+    <button class="btn wide" name="decision" value="discarded" style="color:var(--bad)"
+            onclick="return confirm('Reject this {% if task.kind == "short_video" %}video{% else %}script{% endif %}? It will not be posted and the AI will not redo it.')">✕ Reject, don't use it</button>
   </form>
-  {% else %}<p class="muted" style="margin:0">Only reviewers and owners can approve. You have view access.</p>{% endif %}
+  {% else %}<p class="muted small" style="margin:0">Only reviewers and owners can approve.</p>{% endif %}
 </article>
 {% endwith %}

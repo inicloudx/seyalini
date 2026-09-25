@@ -110,7 +110,7 @@ class Task(models.Model):
 
 
 class Approval(models.Model):
-    DECISIONS = [("pending", "Pending"), ("approved", "Approved"), ("redo", "Redo")]
+    DECISIONS = [("pending", "Pending"), ("approved", "Approved"), ("redo", "Redo"), ("discarded", "Rejected")]
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="approvals")
     task = models.OneToOneField(Task, on_delete=models.CASCADE, related_name="approval")
     decision = models.CharField(max_length=20, choices=DECISIONS, default="pending")

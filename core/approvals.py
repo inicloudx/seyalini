@@ -26,6 +26,22 @@ def decide(task: Task, user, decision: str, reason: str = "") -> Task:
         task.status = "approved"
         Event.objects.create(tenant=task.tenant, agent_key=task.agent_key, task=task, kind="approved",
                              message=f"You approved the {what}: {task.result.get('title', task.title)}")
+    elif decision == "discarded":  # thrown away: no redo, but a reason still teaches the agent
+        task.status = "rejected"
+        if approval.reason:
+            Rule.objects.create(tenant=task.tenant, agent_key=task.agent_key, product=task.product,
+                                text=f"Avoid: {approval.reason}", source="rejection")
+        root = task
+        while root.parent_id and root.parent.kind in ("short_script", "short_video"):
+            root = root.parent
+        root.result = {**(root.result or {}), "hidden": True}
+        if root.pk != task.pk:
+            root.save(update_fields=["result"])
+        else:
+            task.result = root.result
+        Event.objects.create(tenant=task.tenant, agent_key=task.agent_key, task=task, kind="rejected",
+                             message=f"You rejected the {what}: {task.result.get('title', task.title)}"
+                                     + (f" ({approval.reason})" if approval.reason else ""))
     else:
         task.status = "rejected"
         if approval.reason:

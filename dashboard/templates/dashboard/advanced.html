@@ -1,0 +1,31 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Advanced · Seyalini{% endblock %}
+{% block content %}
+<section class="stack" style="gap:6px"><h1>Advanced</h1><p class="muted" style="margin:0">The engine room: your AI team, budgets, what they learned and everything they did.</p></section>
+<div class="row">{% if is_owner %}<a class="btn small" href="{% url 'dashboard:settings' %}">← Settings</a>{% endif %}{% if user.is_superuser %}<a class="btn small" href="{% url 'dashboard:platform' %}">Platform (all organisations)</a><a class="btn small" href="/admin/">Database admin</a>{% endif %}</div>
+
+<section class="card stack">
+  <h2>AI team</h2>
+  {% for a in agents %}
+  <div class="stack" style="gap:6px;{% if not forloop.first %}border-top:1px solid var(--line2);padding-top:12px{% endif %}">
+    <div class="row" style="justify-content:space-between"><b>{{ a.name }}</b><span class="pill {% if a.status == 'active' %}ok{% endif %}"><span class="dot"></span>{% if a.status == "active" %}Working{% else %}Coming soon{% endif %}</span></div>
+    <span class="muted small">{{ a.role }}</span>
+    {% if a.status == "active" %}<div class="small muted">₹{% widthratio a.spent 1 84 %} of ₹{% widthratio a.monthly_budget_usd 1 84 %} this month · model {{ a.model }} · version {{ a.version }}</div><div class="bar"><i style="width:{{ a.pct }}%"></i></div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card stack">
+  <h2>What the AI learned from you</h2>
+  <p class="muted small" style="margin:0">Every “change” note becomes a rule the AI follows from then on.</p>
+  {% for r in rules %}<div class="row small" style="gap:8px"><span class="pill">{{ r.product.name|default:"All apps" }}</span><span>{{ r.text }}</span></div>
+  {% empty %}<p class="muted small" style="margin:0">Nothing yet.</p>{% endfor %}
+</section>
+
+<section class="card stack">
+  <h2>Activity</h2>
+  {% for e in events %}
+  <div class="row small" style="gap:8px;flex-wrap:nowrap;align-items:flex-start;border-top:1px solid var(--line2);padding-top:6px"><span class="muted" style="flex-shrink:0;width:92px">{{ e.created|date:"j M H:i" }}</span><span style="flex:1">{{ e.message }}</span>{% if e.cost_usd %}<span class="muted" style="flex-shrink:0">${{ e.cost_usd|floatformat:3 }}</span>{% endif %}</div>
+  {% empty %}<p class="muted small">Nothing yet.</p>{% endfor %}
+</section>
+{% endblock %}

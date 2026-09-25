@@ -4,16 +4,16 @@ name: Marketing
 role: Grow installs through daily short-form content
 status: active
 autonomy: 2                 # L2 supervised: acts, you approve before anything is public
-model: gemini/gemini-2.5-flash   # cheap and good at short creative writing
-monthly_budget_usd: 10      # hard cap (~₹850): scripts + images + video. Agent stops when reached
-changelog: Budget lowered to $10 to stay under ₹1,000/month total
+model: gemini/gemini-3.5-flash-lite   # cheap, fast; 2.5 models were retired for new users (Sep 2026)
+monthly_budget_usd: 15      # hard cap (~₹1,260): scripts + images + video. Agent stops when reached
+changelog: Hybrid videos (real Veo clip for the hook), 1 Short a day, budget $15
 config:
   max_scenes: 3             # ~8 s per scene -> ~24 s Short + 3 s end card
   temperature: 0.9
   video:
     # images ~$0.12/Short (60/month ~ $7) | hybrid ~$0.50 | veo ~$1.20+
-    mode: images
-    image_model: gemini-2.5-flash-image
+    mode: hybrid
+    image_model: gemini-3.1-flash-lite-image
     image_usd: 0.04                     # used for the budget estimate
     veo_model: veo-3.1-lite-generate-preview
     veo_usd_per_second: 0.05

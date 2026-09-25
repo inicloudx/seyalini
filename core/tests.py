@@ -86,8 +86,17 @@ class FoundationTests(TestCase):
         write_script(self.product)
         self.client.force_login(self.user)
         r = self.client.get("/")
-        self.assertContains(r, "Needs your decision")
-        self.assertContains(r, "Dry-run mode")
+        self.assertContains(r, "Needs you")
+        self.assertContains(r, "Practice mode")
+        self.assertContains(r, "How it's going")        # the 5-step progress view
+
+    def test_simple_pages_render(self):
+        self.client.force_login(self.user)
+        for url, text in [("/videos/", "Videos"), ("/advanced/", "AI team"), ("/products/", "Your apps"),
+                          ("/products/alphamagic/", "What the AI knows"), ("/products/new/", "Let the AI study my app"),
+                          ("/settings/", "Practice mode"), ("/manifest.webmanifest", "Seyalini"), ("/sw.js", "fetch")]:
+            with self.subTest(url=url):
+                self.assertContains(self.client.get(url), text)
 
 
 @override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
@@ -208,7 +217,7 @@ class OnboardingTests(TestCase):
         self.assertEqual(draft["screens_saved"], 2)
         self.assertEqual(product.config["accent"], "#2266AA")
         self.assertTrue(Task.objects.filter(product=product, kind="product_brief", status="awaiting_approval").exists())
-        self.assertContains(self.client.get("/"), "Review brief")
+        self.assertContains(self.client.get("/"), "Review the brief")
         page = self.client.get("/products/word-zoo/")
         self.assertContains(page, "Questions for you")
 
@@ -355,12 +364,12 @@ class MultiAppTests(TestCase):
         write_script(other)
         page = self.client.get("/").content.decode()
         self.assertIn("All apps · 2", page)
-        self.assertIn("Write a Short for", page)          # two apps -> choose which
+        self.assertIn("New Short for", page)          # two apps -> choose which
         self.assertIn("Next step", page)
         self.assertIn("Write and approve your first script", page)
         page = self.client.get("/?p=flag-magic").content.decode()
-        self.assertIn("Write a Short now · Flag Magic", page)
-        self.assertIn("/ 7 target", page)
+        self.assertIn("New Short · Flag Magic", page)
+        self.assertIn("/ 7<", page)
         self.assertNotIn("Letter of the Day", page)        # AlphaMagic's inbox hidden while focused on Flag Magic
 
 
@@ -507,6 +516,17 @@ class MultiTenantTests(TestCase):
 
 @override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA, TENANTS_DIR=TMP_TENANTS)
 class LiveDuplicateTests(TestCase):
+    def test_richer_copy_is_kept_even_if_newer(self):
+        _copy_tenants()
+        user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        t = Tenant.objects.create(slug="inixr", name="INIXR")
+        Product.objects.create(tenant=t, slug="alpha-magic", name="Alpha Magic", status="live", brief="# x",
+                               config={"marketing": True, "store_url": "https://play.google.com/store/apps/details?id=com.inixrtechnology.alphamagic"})
+        load_all()  # AlphaMagic AR (with letter scenes) now has the HIGHER id
+        self.client.force_login(user)
+        page = self.client.get("/?p=all").content.decode()
+        self.assertIn("“Alpha Magic” is a second copy of “AlphaMagic AR”", page)
+
     def test_second_live_copy_is_offered_for_archive(self):
         _copy_tenants()
         user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
@@ -521,3 +541,82 @@ class LiveDuplicateTests(TestCase):
         self.assertEqual(Product.objects.get(slug="alpha-magic").status, "archived")
         self.assertEqual(Product.objects.get(slug="alphamagic").status, "live")
         self.assertNotIn("second copy", self.client.get("/?p=all").content.decode())
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class FailedShortTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+
+    def _failed_script(self):
+        return Task.objects.create(tenant=self.product.tenant, product=self.product, agent_key="marketing",
+                                   kind="short_script", title="Script: Watch the Magic", status="failed",
+                                   result={"error": "model gone"})
+
+    def test_remove_hides_failed_short(self):
+        t = self._failed_script()
+        self.assertContains(self.client.get("/"), "Try again")
+        self.client.post(f"/shorts/{t.id}/action/", {"action": "hide"})
+        self.assertNotContains(self.client.get("/"), "model gone")
+
+    def test_retry_writes_a_new_script(self):
+        t = self._failed_script()
+        self.client.post(f"/shorts/{t.id}/action/", {"action": "retry"})
+        self.assertTrue(Task.objects.filter(kind="short_script", status="awaiting_approval").exists())
+        self.assertTrue(Task.objects.get(id=t.id).result.get("hidden"))
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class RejectTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+
+    def test_reject_video_throws_it_away_without_redo(self):
+        write_script(self.product)
+        script = Task.objects.get(kind="short_script")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{script.id}/decide/", {"decision": "approved"})
+        video = Task.objects.get(kind="short_video")
+        with self.captureOnCommitCallbacks(execute=True):
+                r = self.client.post(f"/tasks/{video.id}/decide/", {"decision": "discarded", "reason": "too dark"},
+                                 HTTP_HX_REQUEST="true")
+        self.assertContains(r, "Rejected")
+        self.assertEqual(Task.objects.filter(kind="short_video").count(), 1)   # no remake
+        self.assertTrue(Task.objects.get(id=script.id).result.get("hidden"))    # gone from Today
+        self.assertTrue(Rule.objects.filter(text="Avoid: too dark").exists())
+        self.assertNotContains(self.client.get("/"), "Video to check")
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class VideoDeleteTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+        write_script(self.product)
+        script = Task.objects.get(kind="short_script")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{script.id}/decide/", {"decision": "approved"})
+        self.video = Task.objects.get(kind="short_video")
+        self.folder = Path(TMP_MEDIA) / "videos" / "inixr" / str(self.video.id)
+
+    def test_delete_approved_video_frees_disk(self):
+        self.client.post(f"/tasks/{self.video.id}/decide/", {"decision": "approved"})
+        self.assertTrue(self.folder.exists())
+        self.assertContains(self.client.get("/videos/"), "Delete")
+        self.client.post(f"/videos/{self.video.id}/delete/")
+        self.assertFalse(self.folder.exists())
+        self.assertNotContains(self.client.get("/videos/"), "Download")
+
+    def test_cleanup_removes_rejected_keeps_waiting(self):
+        self.client.post(f"/tasks/{self.video.id}/decide/", {"decision": "discarded"})
+        self.assertContains(self.client.get("/videos/"), "Free up space")
+        self.client.post("/videos/cleanup/")
+        self.assertFalse(self.folder.exists())

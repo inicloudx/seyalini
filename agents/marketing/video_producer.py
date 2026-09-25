@@ -20,7 +20,7 @@ from tools.fonts import use_brand_fonts
 
 DEFAULTS = {
     "mode": "images",
-    "image_model": "gemini-2.5-flash-image",
+    "image_model": "gemini-3.1-flash-lite-image",
     "image_usd": 0.04,
     "veo_model": "veo-3.1-lite-generate-preview",
     "veo_usd_per_second": 0.05,
@@ -112,9 +112,16 @@ def produce_video(script_task: Task, redo_of: Task | None = None) -> Task:
                 src = random.choice(library_files(assets))
                 agent.log("asset_used", f"Scene {i + 1}: real app footage {src.name} (free)", task=task)
             elif kind == "veo" and not dry:
-                src = veo.generate(prompt, out_dir / f"scene{i}.mp4", model=cfg["veo_model"], api_key=gemini_key,
-                                   seconds=int(secs), resolution=cfg["veo_resolution"])
-                agent.spend("video_gen", f"Scene {i + 1}: Veo {int(secs)}s", Decimal(str(cfg["veo_usd_per_second"])) * int(secs), task=task)
+                try:
+                    src = veo.generate(prompt, out_dir / f"scene{i}.mp4", model=cfg["veo_model"], api_key=gemini_key,
+                                       seconds=int(secs), resolution=cfg["veo_resolution"])
+                    agent.spend("video_gen", f"Scene {i + 1}: Veo {int(secs)}s", Decimal(str(cfg["veo_usd_per_second"])) * int(secs), task=task)
+                except Exception as exc:  # never lose the whole Short over one clip: use a picture instead
+                    agent.log("veo_fallback", f"Scene {i + 1}: video clip failed ({str(exc)[:160]}); using a picture", task=task)
+                    kinds[i] = "image"
+                    src = imagegen.generate(prompt, out_dir / f"scene{i}.png", model=cfg["image_model"], dry_run=dry,
+                                            api_key=gemini_key, label=f"Scene {i + 1}: {sc.get('on_screen_text', '')}", accent=accent)
+                    agent.spend("image_gen", f"Scene {i + 1}: image (instead of video)", cfg["image_usd"], task=task)
             else:
                 src = imagegen.generate(prompt, out_dir / f"scene{i}.png", model=cfg["image_model"], dry_run=dry, api_key=gemini_key,
                                         label=f"Scene {i + 1} ({kind}): {sc.get('on_screen_text', '')}", accent=accent)

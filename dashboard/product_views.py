@@ -72,8 +72,8 @@ def _start_research(request, product, form):
     product.config = cfg
     product.save()
     enqueue(research_product, product.id, answers)
-    messages.success(request, f"The agent is studying {product.name}: your answers, the store listing and the "
-                              f"screenshots. The draft appears on this page in about a minute. Next: review it and click Activate.")
+    messages.success(request, f"The AI is studying {product.name}: your answers, the store page and the screenshots. "
+                              f"In about a minute its brief appears here. Then just check it and tap “Looks good”.")
     return redirect("dashboard:product", slug=product.slug)
 
 
@@ -137,10 +137,10 @@ def product_detail(request, slug):
         strategist.activate(product, request.user, form.cleaned_data["brief"], form.cleaned_data["pillars"],
                             form.cleaned_data["visual_style"])
         if was_live:
-            messages.success(request, f"Saved. The agents use the updated brief for {product.name} from the next script.")
+            messages.success(request, f"Saved. The AI uses the updated brief for {product.name} from the next Short.")
         else:
-            messages.success(request, f"{product.name} is live. The Marketing agent now writes Shorts for it. "
-                                      f"Next step: press “Write a Short now” to see the first one.")
+            messages.success(request, f"{product.name} is live. The AI now makes Shorts for it. "
+                                      f"Tap “＋ New Short” to see the first one.")
         return redirect(_home(product.slug))
     running = Task.objects.filter(product=product, kind="product_brief", status="running").exists()
     last = Task.objects.filter(product=product, kind="product_brief").first()
@@ -149,7 +149,7 @@ def product_detail(request, slug):
                                                    "shorts_per_day": cfg.get("shorts_per_day", 2)})
     return render(request, "dashboard/product_detail.html", {
         "product": product, "draft": draft, "form": form, "running": running, "last": last,
-        "has_logo": logo.exists(), "settings_form": settings_form,
+        "has_logo": logo.exists(), "settings_form": settings_form, "ideas": source.get("pillars") or [],
         "screens": len(list((product_dir(product) / "assets" / "screens").glob("*.png"))),
     })
 

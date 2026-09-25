@@ -1,4 +1,6 @@
+import shutil
 from datetime import timedelta
+from pathlib import Path
 from decimal import Decimal
 
 from django.conf import settings
@@ -76,17 +78,75 @@ def _next_steps(t, products, dry_run, request=None):
     # Two LIVE apps that are really the same app (same store link / same name)? Tidy that up first.
     from .product_views import find_duplicate
 
-    for newer in sorted(live, key=lambda p: -p.id):
-        cfg = newer.config or {}
-        dup, _ = find_duplicate(t, newer.name, cfg.get("store_url") or (cfg.get("onboarding") or {}).get("store_url", ""), exclude=newer)
-        if dup is not None and dup.id < newer.id:
-            nxt = {"title": f"Tidy up: “{newer.name}” is a second copy of “{dup.name}”",
-                   "why": f"Both are live, so the agents would make Shorts for the same app twice. Keep “{dup.name}” "
-                          f"(the original) and archive this copy. Nothing is deleted; you can restore it from Products.",
-                   "action": f"Archive “{newer.name}”", "post_url": reverse("dashboard:product_archive", args=[newer.slug]),
-                   "alt_action": "Compare them first", "alt_url": reverse("dashboard:products"), "url": "#"}
-            break
+    def richness(p):  # keep the most complete copy: real letter scenes, logo, longer brief, then the older one
+        cfg = p.config or {}
+        return (len(cfg.get("letter_words") or {}), (product_dir(p) / "assets" / "logo.png").exists(),
+                len(p.brief or ""), -p.id)
+
+    for p in live:
+        cfg = p.config or {}
+        dup, _ = find_duplicate(t, p.name, cfg.get("store_url") or (cfg.get("onboarding") or {}).get("store_url", ""), exclude=p)
+        if dup is None or dup.status != "live":
+            continue
+        keep, copy = (p, dup) if richness(p) >= richness(dup) else (dup, p)
+        nxt = {"title": f"Tidy up: “{copy.name}” is a second copy of “{keep.name}”",
+               "why": f"Both are live, so the agents would make Shorts for the same app twice. Keep “{keep.name}” "
+                      f"(the more complete one) and archive this copy. Nothing is deleted; you can restore it from Products.",
+               "action": f"Archive “{copy.name}”", "post_url": reverse("dashboard:product_archive", args=[copy.slug]),
+               "alt_action": "Compare them first", "alt_url": reverse("dashboard:products"), "url": "#"}
+        break
     return steps, nxt, sum(s["done"] for s in steps)
+
+STEPS = ["Idea", "Script", "Video", "Your check", "Ready"]
+INR_PER_USD = 84  # rough, for display only
+
+
+def _latest(task):
+    """Follow redo / video children to the newest task of one Short."""
+    seen = 0
+    while seen < 10:
+        child = Task.objects.filter(parent=task, kind__in=["short_script", "short_video"]).order_by("-id").first()
+        if child is None:
+            return task
+        task, seen = child, seen + 1
+    return task
+
+
+def _flow(root):
+    """One Short's journey as 5 steps: done / working / you / failed / todo."""
+    cur = _latest(root)
+    state = ["todo"] * 5
+    note, task_for_you = "", None
+    k, st = cur.kind, cur.status
+    if k == "short_script":
+        state[0] = "done"
+        if st == "running":
+            state[1], note = "working", "The AI is writing the script…"
+        elif st == "awaiting_approval":
+            state[1], state[3], note, task_for_you = "done", "you", "Script ready: check it and approve.", cur
+        elif st == "failed":
+            state[1], note = "failed", f"Script failed: {str(cur.result.get('error', ''))[:120]}"
+        elif st == "rejected":
+            state[1], note = "working", "Rewriting with your feedback…"
+        else:  # approved, video not started yet
+            state[1], state[2], note = "done", "working", "Starting the video…"
+    else:
+        state[0] = state[1] = "done"
+        if st == "running":
+            state[2], note = "working", "The AI is making the video (1–2 min)…"
+        elif st == "awaiting_approval":
+            state[2], state[3], note, task_for_you = "done", "you", "Video ready: watch it and approve.", cur
+        elif st == "failed":
+            state[2], note = "failed", f"Video failed: {str(cur.result.get('error', ''))[:120]}"
+        elif st == "rejected":
+            state[2], note = "working", "Remaking the video with your feedback…"
+        else:
+            state = ["done"] * 5
+            note = "Ready to post."
+    title = cur.result.get("title") or root.result.get("title") or root.title
+    return {"id": root.id, "title": str(title).replace("[Sample] ", ""), "product": root.product,
+            "steps": list(zip(STEPS, state)), "note": note, "task": task_for_you, "latest": cur,
+            "done": state[-1] == "done", "failed": "failed" in state, "created": root.created}
 
 
 @login_required
@@ -135,6 +195,10 @@ def home(request):
         p.pending_count = counts.get(p.id, 0)
     dry = is_dry_run(t)
     steps, next_step, done = _next_steps(t, products, dry, request)
+    roots = tasks.filter(kind="short_script", created__gte=now - timedelta(days=3)).exclude(parent__kind="short_script")[:6]
+    flows = [_flow(r) for r in roots if not (r.result or {}).get("hidden")]
+    active_flows = [f for f in flows if not f["done"]]
+    week_videos = tasks.filter(kind="short_video", status="approved", updated__gte=week_ago).count()
     ctx = {
         "agents": agents,
         "focus": focus,
@@ -158,6 +222,11 @@ def home(request):
         },
         "tenants": Tenant.objects.all() if request.user.is_superuser else Tenant.objects.filter(memberships__user=request.user),
         "dry_run": dry,
+        "flows": active_flows[:4],
+        "finished_flows": [f for f in flows if f["done"]][:3],
+        "week_videos": week_videos,
+        "spend_inr": int(spend * INR_PER_USD),
+        "budget_inr": int(budget * INR_PER_USD),
         "video_mode": ((next((a for a in agents if a.key == "marketing"), None) or AgentCard()).config or {}).get("video", {}).get("mode", "images"),
     }
     return render(request, "dashboard/home.html", ctx)
@@ -169,7 +238,7 @@ def home(request):
 def decide(request, task_id):
     task = get_object_or_404(Task, id=task_id, tenant=request.tenant)
     decision = request.POST.get("decision")
-    if decision not in ("approved", "redo"):
+    if decision not in ("approved", "redo", "discarded"):
         return HttpResponseBadRequest("bad decision")
     reason = request.POST.get("reason") or request.POST.get("chip") or ""
     decide_task(task, request.user, decision, reason)
@@ -203,6 +272,29 @@ def run_marketing(request):
 
 
 @login_required
+@require_role("reviewer")
+@require_POST
+def flow_action(request, task_id):
+    """Buttons on a failed Short: try again, or hide it from Today."""
+    from agents.marketing.tasks import make_video, write_script
+
+    root = get_object_or_404(Task, id=task_id, tenant=request.tenant, kind="short_script")
+    cur = _latest(root)
+    if request.POST.get("action") == "retry" and cur.status == "failed" and root.product:
+        if cur.kind == "short_video":
+            enqueue(make_video, root.id)
+            messages.success(request, "Trying the video again. It takes a few minutes.")
+        else:
+            enqueue(write_script, root.product.id, "manual")
+            messages.success(request, "Writing a new script.")
+    retry_video = request.POST.get("action") == "retry" and cur.kind == "short_video"
+    if not retry_video:  # a new script replaces this Short, or the user removed it
+        root.result = {**(root.result or {}), "hidden": True}
+        root.save(update_fields=["result"])
+    return redirect("dashboard:home")
+
+
+@login_required
 def running(request):
     """Polled by the dashboard every few seconds while something is in production."""
     tasks = Task.objects.filter(tenant=request.tenant, status="running").select_related("product")
@@ -217,3 +309,90 @@ def running(request):
 def switch_tenant(request):
     request.session["tenant"] = request.POST.get("tenant")
     return redirect("dashboard:home")
+
+
+@login_required
+def videos(request):
+    if (resp := _need_tenant(request)) is not None:
+        return resp
+    qs = (Task.objects.filter(tenant=request.tenant, kind="short_video").exclude(product__status="archived")
+          .select_related("product").order_by("-updated"))
+    ready = [v for v in qs.filter(status="approved")[:60] if not (v.result or {}).get("deleted")]
+    for v in ready:
+        v.mb = _folder_mb(_video_dir(v))
+    # rejected, failed and replaced versions still on disk
+    leftovers = [v for v in qs.exclude(status__in=["approved", "awaiting_approval", "running"])
+                 if not (v.result or {}).get("deleted") and _video_dir(v).exists()]
+    return render(request, "dashboard/videos.html", {
+        "ready": ready,
+        "waiting": qs.filter(status="awaiting_approval")[:12],
+        "leftovers": len(leftovers),
+        "leftover_mb": round(sum(_folder_mb(_video_dir(v)) for v in leftovers), 1),
+    })
+
+
+def _video_dir(task):
+    return Path(settings.MEDIA_ROOT) / "videos" / task.tenant.slug / str(task.id)
+
+
+def _folder_mb(folder):
+    if not folder.exists():
+        return 0
+    return round(sum(f.stat().st_size for f in folder.rglob("*") if f.is_file()) / 1_048_576, 1)
+
+
+def _delete_video_files(task):
+    folder = _video_dir(task)
+    if folder.exists():
+        shutil.rmtree(folder, ignore_errors=True)
+    task.result = {**(task.result or {}), "deleted": True}
+    task.save(update_fields=["result"])
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def video_delete(request, task_id):
+    """Delete a video's files from disk to save space. The history line stays."""
+    task = get_object_or_404(Task, id=task_id, tenant=request.tenant, kind="short_video")
+    if task.status in ("running", "awaiting_approval"):
+        messages.error(request, "Approve or reject this video first.")
+        return redirect("dashboard:videos")
+    mb = _folder_mb(_video_dir(task))
+    _delete_video_files(task)
+    messages.success(request, f"Deleted “{str((task.result or {}).get('title') or task.title)[:60]}” ({mb} MB freed).")
+    return redirect("dashboard:videos")
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def videos_cleanup(request):
+    """Delete every rejected, failed or replaced video in one go."""
+    qs = Task.objects.filter(tenant=request.tenant, kind="short_video").exclude(
+        status__in=["approved", "awaiting_approval", "running"])
+    freed, count = 0, 0
+    for v in qs:
+        if (v.result or {}).get("deleted") or not _video_dir(v).exists():
+            continue
+        freed += _folder_mb(_video_dir(v))
+        _delete_video_files(v)
+        count += 1
+    messages.success(request, f"Deleted {count} unused video{'s' if count != 1 else ''} ({round(freed, 1)} MB freed).")
+    return redirect("dashboard:videos")
+
+
+@login_required
+def advanced(request):
+    """The engine room: AI team, budgets, learned rules, activity. Hidden from the main tabs."""
+    if (resp := _need_tenant(request)) is not None:
+        return resp
+    t = request.tenant
+    agents = sorted(AgentCard.objects.filter(tenant=t, is_current=True), key=lambda a: ({"active": 0}.get(a.status, 1), a.key))
+    for a in agents:
+        a.spent = a.spent_this_month()
+        a.pct = int(min(100, (a.spent / a.monthly_budget_usd * 100) if a.monthly_budget_usd else 0))
+    return render(request, "dashboard/advanced.html", {
+        "agents": agents, "rules": Rule.objects.filter(tenant=t, active=True)[:30],
+        "events": Event.objects.filter(tenant=t).select_related("task")[:60], "dry_run": is_dry_run(t),
+    })

@@ -1,5 +1,6 @@
 """Veo video clips (Gemini API). The premium option: use for the hook scene only
-(hybrid mode) to keep cost down. Audio is off; the editor adds music."""
+(hybrid mode) to keep cost down. The Gemini Developer API always adds Veo's own sound;
+the editor mixes in the music."""
 import time
 from pathlib import Path
 
@@ -14,18 +15,25 @@ def generate(prompt: str, out: Path, *, model: str, api_key: str = "", seconds: 
 
     out.parent.mkdir(parents=True, exist_ok=True)
     c = client(api_key)
-    op = c.models.generate_videos(
-        model=model,
-        prompt=prompt,
-        config=types.GenerateVideosConfig(
-            aspect_ratio="9:16",
-            duration_seconds=seconds,
-            resolution=resolution,
-            negative_prompt=NEGATIVE,
-            generate_audio=False,
-            number_of_videos=1,
-        ),
-    )
+    # Not every Veo model accepts every option (e.g. Veo 3.1 Lite on the Gemini Developer API
+    # rejects negativePrompt). Start with all of them and drop any the API says it doesn't support.
+    options = {"aspect_ratio": "9:16", "duration_seconds": seconds, "resolution": resolution,
+               "negative_prompt": NEGATIVE, "number_of_videos": 1}
+    full_prompt = f"{prompt} Avoid: {NEGATIVE}."
+    for _ in range(len(options)):
+        try:
+            op = c.models.generate_videos(model=model, prompt=full_prompt,
+                                          config=types.GenerateVideosConfig(**options))
+            break
+        except Exception as exc:
+            msg = str(exc)
+            bad = next((k for k in options if k.replace("_", "") in msg.replace("_", "").lower()
+                        or _camel(k) in msg), None)
+            if "INVALID_ARGUMENT" not in msg or bad is None or bad == "aspect_ratio":
+                raise
+            options.pop(bad)
+    else:
+        raise RuntimeError("Veo rejected every option set")
     waited = 0
     while not op.done:
         if waited > timeout_s:
@@ -42,3 +50,8 @@ def generate(prompt: str, out: Path, *, model: str, api_key: str = "", seconds: 
     c.files.download(file=video)
     video.save(str(out))
     return out
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(w.title() for w in rest)

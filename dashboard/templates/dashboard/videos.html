@@ -1,0 +1,33 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Videos · Seyalini{% endblock %}
+{% block content %}
+<section class="stack" style="gap:6px"><h1>Videos</h1><p class="muted" style="margin:0">Approved videos, ready to post. Tap one to play or download.</p></section>
+{% for m in messages %}<div class="msg{% if m.tags == 'error' %} error{% endif %}" role="status">{{ m }}</div>{% endfor %}
+{% if leftovers and can_review %}
+<section class="card row" style="justify-content:space-between">
+  <div class="stack" style="gap:2px"><b>Free up space</b><span class="muted small">{{ leftovers }} rejected or old version{{ leftovers|pluralize }} still on your disk · {{ leftover_mb }} MB</span></div>
+  <form method="post" action="{% url 'dashboard:videos_cleanup' %}" onsubmit="return confirm('Delete {{ leftovers }} unused video{{ leftovers|pluralize }}? Approved videos are kept.')">{% csrf_token %}<button class="btn small">Delete unused</button></form>
+</section>
+{% endif %}
+{% if waiting %}<div class="note info"><b>{{ waiting|length }} video{{ waiting|length|pluralize }} waiting for your check</b> on <a href="{% url 'dashboard:home' %}#inbox">Today</a>.</div>{% endif %}
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+  {% for v in ready %}
+  <article class="card stack" style="padding:10px;gap:8px">
+    <video controls playsinline preload="none" poster="/media/{{ v.result.thumbnail }}" style="width:100%;aspect-ratio:9/16;border-radius:12px;background:#000"><source src="/media/{{ v.result.video }}" type="video/mp4"></video>
+    <b class="small">{{ v.result.title|cut:"[Sample] "|truncatechars:60 }}</b>
+    <span class="muted small">{{ v.product.name }} · {{ v.updated|date:"j M" }}</span>
+    <span class="muted small">{{ v.mb }} MB</span>
+    <div class="row" style="gap:6px;flex-wrap:nowrap">
+      <a class="btn small" style="flex:1" href="/media/{{ v.result.video }}" download>Download</a>
+      {% if can_review %}<form method="post" action="{% url 'dashboard:video_delete' v.id %}" onsubmit="return confirm('Delete this video from your disk? Download it first if you want to keep a copy.')">{% csrf_token %}<button class="btn small" aria-label="Delete video" title="Delete" style="color:var(--bad)">Delete</button></form>{% endif %}
+    </div>
+  </article>
+  {% empty %}
+  <div class="card" style="grid-column:1/-1;text-align:center;padding:32px 18px">
+    <h3>No videos yet</h3><p class="muted small" style="margin:6px 0 12px">Approve a script on Today and the AI makes the video.</p>
+    <a class="btn primary" href="{% url 'dashboard:home' %}">Go to Today</a>
+  </div>
+  {% endfor %}
+</div>
+<p class="muted small">Automatic posting to YouTube, Instagram and Facebook is coming next.</p>
+{% endblock %}

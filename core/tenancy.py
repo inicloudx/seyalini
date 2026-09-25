@@ -26,5 +26,15 @@ def tenant_context(request):
     from django.conf import settings
 
     role = getattr(request, "role", "")
-    return {"tenant": getattr(request, "tenant", None), "role": role, "allow_signup": settings.ALLOW_SIGNUP,
-            "can_review": RANK.get(role, 0) >= 2, "is_owner": role == "owner"}
+    tenant = getattr(request, "tenant", None)
+    ctx = {"tenant": tenant, "role": role, "allow_signup": settings.ALLOW_SIGNUP,
+           "can_review": RANK.get(role, 0) >= 2, "is_owner": role == "owner", "nav_pending": 0, "tenants": []}
+    user = getattr(request, "user", None)
+    if tenant is not None and user is not None and user.is_authenticated:
+        from .models import Task
+
+        ctx["nav_pending"] = Task.objects.filter(tenant=tenant, status="awaiting_approval").exclude(product__status="archived").count()
+        from .secrets import is_dry_run
+        ctx["dry_run"] = is_dry_run(tenant)
+        ctx["tenants"] = list(Tenant.objects.all() if user.is_superuser else Tenant.objects.filter(memberships__user=user))
+    return ctx

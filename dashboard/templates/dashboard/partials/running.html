@@ -1,15 +1,8 @@
 <div id="running" {% if running %}hx-get="{% url 'dashboard:running' %}" hx-trigger="every 4s" hx-swap="outerHTML"{% endif %}>
   {% if running %}
-  <section class="card" aria-label="In production" aria-live="polite" style="border-color:var(--info)">
-    <h2 style="font-size:18px;margin-bottom:8px">In production</h2>
-    {% for t in running %}
-    <div style="display:flex;gap:10px;align-items:center;padding:4px 0">
-      <span class="pill" style="color:var(--info)"><span class="dot"></span>Working</span>
-      <span>{{ t.title }}</span>
-      <span class="muted mono" style="margin-left:auto">{{ t.created|timesince }}</span>
-    </div>
-    {% endfor %}
-    <p class="muted" style="margin:6px 0 0;font-size:12px">This page refreshes by itself when it’s done. A video takes about 20 s in dry run and a few minutes with real AI.</p>
+  <section class="note info row" aria-live="polite" style="gap:10px">
+    <span class="dot" style="animation:pulse 1.4s infinite"></span>
+    <span><b>Working:</b> {% for t in running %}{{ t.title|cut:"[Sample] "|truncatechars:50 }}{% if not forloop.last %} · {% endif %}{% endfor %}. This page updates by itself.</span>
   </section>
   {% endif %}
 </div>

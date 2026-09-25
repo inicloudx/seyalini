@@ -1,42 +1,41 @@
 {% extends "dashboard/base.html" %}
-{% block title %}{% if is_new %}Add your app{% else %}Improve brief · {{ product.name }}{% endif %} · Seyalini{% endblock %}
+{% block title %}{% if is_new %}Add your app{% else %}Improve · {{ product.name }}{% endif %} · Seyalini{% endblock %}
 {% block content %}
-<header>
-  <h1 style="font-size:30px">{% if is_new %}Add your app{% else %}Improve the brief for {{ product.name }}{% endif %}</h1>
-  <p class="muted" style="margin:4px 0 0;max-width:720px">Answer in your own words; short is fine. The agent then reads your Play Store listing, looks at the screenshots and writes a sharper brand brief. You review it before anything uses it.</p>
-</header>
+<a href="{% if is_new %}{% url 'dashboard:products' %}{% else %}{% url 'dashboard:product' product.slug %}{% endif %}" class="small">← Back</a>
+<section class="stack" style="gap:6px">
+  <h1>{% if is_new %}Add your app{% else %}Improve {{ product.name }}{% endif %}</h1>
+  <p class="muted" style="margin:0">Fill in a few lines. The AI reads your Play Store page, looks at the screenshots and writes the marketing plan. You check it before anything is posted.</p>
+</section>
+<div class="flow" aria-hidden="true" style="max-width:520px">
+  <div class="step you"><i>1</i><span>You fill this</span></div><div class="step"><i>2</i><span>AI studies app</span></div><div class="step"><i>3</i><span>You check</span></div><div class="step"><i>4</i><span>Shorts start</span></div>
+</div>
+
 {% if duplicate %}
-<section class="card" role="alert" style="border-color:var(--warn);max-width:760px;display:flex;flex-direction:column;gap:8px">
-  {% if dup_reason == "link" %}
-  <b>You already have this app: {{ duplicate.name }}</b>
-  <span>It uses the same Play Store link. To make its brief better, improve that one instead of creating a copy.</span>
-  {% else %}
-  <b>Is this the same app as “{{ duplicate.name }}”?</b>
-  <span>The names are very similar. If it's the same app, improve the existing one. If it really is a different app, tick the box at the bottom and submit again.</span>
-  {% endif %}
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a class="btn primary" href="{% url 'dashboard:product_improve' duplicate.slug %}" style="display:inline-flex;align-items:center;text-decoration:none">Improve {{ duplicate.name }} instead</a>
-    <a class="btn" href="{% url 'dashboard:product' duplicate.slug %}" style="display:inline-flex;align-items:center;text-decoration:none">Open {{ duplicate.name }}</a>
-  </div>
+<section class="note warn stack" role="alert" style="gap:8px">
+  {% if dup_reason == "link" %}<b>You already have this app: {{ duplicate.name }}</b><span>It has the same Play Store link. Improve that one instead of making a copy.</span>
+  {% else %}<b>Is this the same app as “{{ duplicate.name }}”?</b><span>If yes, improve the existing one. If it's really a different app, tick the box below and submit again.</span>{% endif %}
+  <div class="row"><a class="btn primary small" href="{% url 'dashboard:product_improve' duplicate.slug %}">Improve {{ duplicate.name }}</a><a class="btn small" href="{% url 'dashboard:product' duplicate.slug %}">Open it</a></div>
 </section>
 {% endif %}
-<form class="card form" method="post" enctype="multipart/form-data" style="max-width:760px">
-  {% csrf_token %}
-  {% for f in form %}{% if f.name != "confirm_new" %}
-  <div>
-    <label for="{{ f.id_for_label }}">{{ f.label }}{% if f.field.required %} *{% endif %}</label>
-    {{ f }}
-    {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}
-    {% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}
-  </div>
+
+{% with basic="name store_url what_it_does audience" %}
+<form class="card form" method="post" enctype="multipart/form-data">{% csrf_token %}
+  {% for f in form %}{% if f.name in basic %}
+  <div><label for="{{ f.id_for_label }}">{{ f.label }}{% if f.field.required %} *{% endif %}</label>{{ f }}
+    {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
   {% endif %}{% endfor %}
-  {% if duplicate and dup_reason == "name" %}
-  <label style="display:flex;gap:8px;align-items:center;font-weight:600">{{ form.confirm_new }} Yes, this is a different app</label>
-  {% endif %}
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <button class="btn primary" type="submit">{% if is_new %}Create brief with AI{% else %}Improve with AI{% endif %}</button>
-    <a href="{% if is_new %}{% url 'dashboard:products' %}{% else %}{% url 'dashboard:product' product.slug %}{% endif %}">Cancel</a>
-    <span class="muted" style="font-size:12px">Costs about $0.01 with a Gemini key. Free in dry run.</span>
-  </div>
+  <details {% for f in form %}{% if f.errors and f.name not in basic %}open{% endif %}{% endfor %}>
+    <summary class="row" style="justify-content:space-between"><b>More details</b><span class="muted small">Optional: price, tone, logo… ▾</span></summary>
+    <div class="form" style="margin-top:12px">
+    {% for f in form %}{% if f.name not in basic and f.name != "confirm_new" %}
+    <div><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+      {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+    {% endif %}{% endfor %}
+    </div>
+  </details>
+  {% if duplicate and dup_reason == "name" %}<label class="row" style="gap:8px;font-weight:600">{{ form.confirm_new }} Yes, this is a different app</label>{% endif %}
+  <button class="btn primary wide" type="submit">✨ {% if is_new %}Let the AI study my app{% else %}Ask the AI to improve it{% endif %}</button>
+  <span class="muted small" style="text-align:center">Takes about a minute · costs under ₹1{% if dry_run %} · free in practice mode{% endif %}</span>
 </form>
+{% endwith %}
 {% endblock %}

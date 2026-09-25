@@ -1,27 +1,32 @@
 {% extends "dashboard/base.html" %}
-{% block title %}Products · Seyalini{% endblock %}
+{% block title %}Apps · Seyalini{% endblock %}
 {% block content %}
-<header style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
-  <div><h1 style="font-size:30px">Products</h1><p class="muted" style="margin:4px 0 0">Every app the agents work for. Each one has a brand brief they read before doing anything.</p></div>
-  {% if is_owner %}<a class="btn primary" href="{% url 'dashboard:product_new' %}" style="display:inline-flex;align-items:center;text-decoration:none">+ Add your app</a>{% endif %}
-</header>
-{% for m in messages %}<div class="msg">{{ m }}</div>{% endfor %}
-<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+<section class="row" style="justify-content:space-between;align-items:flex-end">
+  <div class="stack" style="gap:6px"><h1>Your apps</h1><p class="muted" style="margin:0">The AI markets each app using what it learned about it.</p></div>
+  {% if is_owner %}<a class="btn primary" href="{% url 'dashboard:product_new' %}">＋ Add your app</a>{% endif %}
+</section>
+{% for m in messages %}<div class="msg{% if m.tags == 'error' %} error{% endif %}" role="status">{{ m }}</div>{% endfor %}
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))">
   {% for p in products %}
-  <a class="card" href="{% url 'dashboard:product' p.slug %}" style="text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">{{ p.name }}</b>
-      <span class="pill" style="color:{% if p.status == 'live' %}var(--ok){% else %}var(--warn){% endif %}">{% if p.status == 'live' %}Live{% elif p.status == 'review' %}Brief to review{% else %}Setting up{% endif %}</span></div>
-    <span class="muted" style="font-size:13px">{{ p.config.pillars|length }} content pillars · {% if p.config.marketing %}Marketing on, {{ p.config.shorts_per_day|default:2 }}/day{% else %}Marketing off{% endif %}{% if p.config.draft %} · <b style="color:var(--warn)">new draft waiting</b>{% endif %}</span>
+  <a class="card stack" href="{% url 'dashboard:product' p.slug %}" style="text-decoration:none;color:var(--ink);gap:10px">
+    <div class="row" style="justify-content:space-between"><h3>{{ p.name }}</h3>
+      <span class="pill {% if p.status == 'live' and p.config.marketing %}ok{% else %}warn{% endif %}">{% if p.status == 'live' and p.config.marketing %}● Marketing on{% elif p.status == 'live' %}Paused{% elif p.status == 'review' %}Brief to review{% else %}Setting up{% endif %}</span></div>
+    <span class="muted small">{% if p.config.marketing %}{{ p.config.shorts_per_day|default:2 }} Short{{ p.config.shorts_per_day|default:2|pluralize }} a day · {% endif %}{{ p.config.pillars|length }} content ideas{% if p.config.draft %} · <b style="color:var(--warn)">new brief waiting</b>{% endif %}</span>
   </a>
-  {% empty %}<p class="muted">No products yet. Click “+ Add your app” to start.</p>{% endfor %}
+  {% empty %}
+  <div class="card" style="grid-column:1/-1;text-align:center;padding:32px 18px">
+    <h3>Add your first app</h3><p class="muted small" style="margin:6px 0 12px">Paste the Play Store link and answer two questions. The AI does the rest.</p>
+    {% if is_owner %}<a class="btn primary" href="{% url 'dashboard:product_new' %}">＋ Add your app</a>{% endif %}
+  </div>
+  {% endfor %}
 </div>
 {% if archived %}
 <details class="card">
-  <summary style="cursor:pointer;font-weight:600">Archived ({{ archived|length }})</summary>
+  <summary class="row" style="justify-content:space-between"><b>Archived ({{ archived|length }})</b><span class="muted small">Show ▾</span></summary>
   {% for p in archived %}
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line2);margin-top:8px">
+  <div class="row" style="justify-content:space-between;padding:10px 0;border-top:1px solid var(--line2);margin-top:8px">
     <a href="{% url 'dashboard:product' p.slug %}">{{ p.name }}</a>
-    <form method="post" action="{% url 'dashboard:product_restore' p.slug %}">{% csrf_token %}<button class="btn">Restore</button></form>
+    {% if is_owner %}<form method="post" action="{% url 'dashboard:product_restore' p.slug %}">{% csrf_token %}<button class="btn small">Restore</button></form>{% endif %}
   </div>
   {% endfor %}
 </details>

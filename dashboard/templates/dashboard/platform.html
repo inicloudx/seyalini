@@ -1,10 +1,10 @@
 {% extends "dashboard/base.html" %}
 {% block title %}Platform · Seyalini{% endblock %}
 {% block content %}
-<header><h1 style="font-size:30px">Platform</h1><p class="muted" style="margin:4px 0 0">Only you (the platform admin) see this. Every organisation has its own logins, apps, keys, budget and data.</p></header>
+<section class="stack" style="gap:6px"><h1>Platform</h1><p class="muted" style="margin:0">Only you (the platform admin) see this. Every organisation has its own logins, apps, keys, budget and data.</p></section>
 {% for m in messages %}<div class="msg" role="status">{{ m }}</div>{% endfor %}
 <section class="card">
-  <h2 style="font-size:20px;margin-bottom:8px">Organisations</h2>
+  <h2>Organisations</h2>
   {% for o in orgs %}
   <div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line2);flex-wrap:wrap">
     <b style="min-width:180px">{{ o.t.name }}</b>
@@ -14,8 +14,8 @@
   </div>
   {% endfor %}
 </section>
-<form class="card form" method="post" style="max-width:760px">{% csrf_token %}
-  <h2 style="font-size:20px">Create an organisation</h2>
+<form class="card form" method="post" >{% csrf_token %}
+  <h2>Create an organisation</h2>
   <p class="muted" style="margin:0">Creates the organisation, its owner login and the default AI team (Marketing on, others planned). The owner then adds their key, their apps and their team.</p>
   {% for f in form %}
   <div>{% if f.field.widget.input_type == "checkbox" %}<label style="display:flex;gap:8px;align-items:center">{{ f }} {{ f.label }}</label>
