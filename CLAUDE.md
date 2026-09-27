@@ -24,6 +24,7 @@ Plan idea -> Script -> Video (Veo clip + images + voice-over) -> Your check -> P
 | Review: Approve / Change something (redo + learned rule) / Reject (discard) | `core/approvals.py`, `partials/approval.html` | done |
 | Publisher agent: YouTube upload (OAuth per organisation, private until Google audit) | `agents/publisher/`, `tools/youtube.py`, Settings -> YouTube | done |
 | Analyst agent: YouTube views/likes, scores pillars, insights on Today | `agents/analyst/` | done |
+| Scout agent: daily study of top Shorts (YouTube search + Gemini watches them), proven patterns fed to every script, "What's working on YouTube" card | `agents/scout/`, 06:00 in `config/celery.py` | done |
 | Videos tab: play, download, delete, free up space, post / retry YouTube, check views | `dashboard/views.py` `videos*` | done |
 | Multi-organisation: own logins, roles (owner/reviewer/viewer), encrypted keys, budgets | `core/` | done |
 | Installable on phone (PWA) | `dashboard/pwa.py` | done |
@@ -31,7 +32,7 @@ Plan idea -> Script -> Video (Veo clip + images + voice-over) -> Your check -> P
 | Instagram / Facebook, installs per video, YouTube audit | - | planned |
 
 Agents (cards in `tenants/<org>/agents/*.yaml`, versioned in DB by `load_tenants`):
-marketing (active), publisher (active), analyst (active), manager / catalyst / developer (planned).
+marketing, publisher, analyst, scout (active), manager / catalyst / developer (planned).
 
 ## 2. Tech
 
