@@ -29,6 +29,8 @@ def _load_dotenv(path: Path):
 
 
 _load_dotenv(BASE_DIR / ".env")
+# Use LiteLLM's built-in price list instead of downloading it at every start (works offline, no warnings)
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 
 def env(name, default=""):
@@ -43,6 +45,19 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-not-secret")
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = [h.strip() for h in env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 DASHBOARD_URL = env("DASHBOARD_URL", "http://localhost:8000")
+
+# --- Serving under a sub-path, e.g. https://inixr.com/seyalini ----------------
+# nginx strips the prefix and forwards to gunicorn; Django adds it back to every link.
+URL_PREFIX = "/" + env("URL_PREFIX", "").strip().strip("/") if env("URL_PREFIX", "").strip("/ ") else ""
+FORCE_SCRIPT_NAME = URL_PREFIX or None
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in env("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+# own cookie names/paths so Seyalini never clashes with the main website on the same domain
+SESSION_COOKIE_NAME = "seyalini_session"
+CSRF_COOKIE_NAME = "seyalini_csrf"
+SESSION_COOKIE_PATH = CSRF_COOKIE_PATH = URL_PREFIX or "/"
+if not DEBUG:  # behind nginx with https
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -78,6 +93,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.media",
                 "core.tenancy.tenant_context",
             ]
         },
@@ -93,7 +109,7 @@ TIME_ZONE = "Asia/Kolkata"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = f"{URL_PREFIX}/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard:home"
@@ -108,8 +124,9 @@ CELERY_TASK_SERIALIZER = "json"
 JOBS_MODE = env("JOBS_MODE", "thread" if CELERY_TASK_ALWAYS_EAGER else "celery")
 
 # --- Media (videos, images). Later: Azure Blob / Cloudflare R2 -------------------
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = f"{URL_PREFIX}/media/"
+MEDIA_ROOT_ENV = env("MEDIA_ROOT", "")
+MEDIA_ROOT = Path(MEDIA_ROOT_ENV) if MEDIA_ROOT_ENV else BASE_DIR / "media"
 
 # --- AI ----------------------------------------------------------------------
 # Force free sample mode for everyone. Otherwise each organisation is live when it has a

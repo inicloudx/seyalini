@@ -75,3 +75,18 @@ def upload(token: str, video: Path, *, title: str, description: str, tags: list[
         done = _check(httpx.put(location, content=fh.read(), timeout=600,
                                 headers={"Authorization": f"Bearer {token}", "Content-Type": "video/mp4"}))
     return done.json()["id"]
+
+
+def video_stats(token: str, video_ids: list[str]) -> dict:
+    """Views, likes and comments for up to 50 of your videos per call (1 quota unit)."""
+    out = {}
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i:i + 50]
+        items = _check(httpx.get(f"{API}/videos", params={"part": "statistics,status", "id": ",".join(batch)},
+                                 headers={"Authorization": f"Bearer {token}"}, timeout=30)).json().get("items") or []
+        for it in items:
+            st = it.get("statistics", {})
+            out[it["id"]] = {"views": int(st.get("viewCount", 0)), "likes": int(st.get("likeCount", 0)),
+                             "comments": int(st.get("commentCount", 0)),
+                             "privacy": it.get("status", {}).get("privacyStatus", "")}
+    return out

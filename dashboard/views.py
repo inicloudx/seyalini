@@ -162,6 +162,35 @@ def _flow(root):
             "youtube_url": getattr(cur, "youtube_url", None)}
 
 
+def _analyst_if_due(tenant):
+    """No scheduler on a laptop: check YouTube numbers in the background when the page opens (max every 6 h)."""
+    from agents.analyst.analyst import is_due
+    from agents.analyst.tasks import run_analyst
+    from agents.publisher.youtube_publisher import is_connected
+
+    try:
+        if is_connected(tenant) and not is_dry_run(tenant) and is_due(tenant):
+            enqueue(run_analyst, tenant.id)
+    except Exception:  # numbers can wait; the dashboard must always open
+        pass
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def analyst_now(request):
+    from agents.analyst import analyst
+
+    try:  # takes a second or two, so do it now and show the result straight away
+        n = analyst.run(request.tenant)
+        views = sum((p.result or {}).get("stats", {}).get("views", 0)
+                    for p in Task.objects.filter(tenant=request.tenant, kind="publish_youtube", status="done"))
+        messages.success(request, f"Updated just now: {n} Short{'s' if n != 1 else ''} on YouTube, {views:,} view{'s' if views != 1 else ''} in total.")
+    except Exception as exc:
+        messages.error(request, f"Could not read YouTube numbers: {str(exc)[:200]}")
+    return redirect("dashboard:videos")
+
+
 @login_required
 def home(request):
     if (resp := _need_tenant(request)) is not None:
@@ -207,11 +236,15 @@ def home(request):
     for p in products:
         p.pending_count = counts.get(p.id, 0)
     dry = is_dry_run(t)
+    _analyst_if_due(t)
     steps, next_step, done = _next_steps(t, products, dry, request)
     roots = tasks.filter(kind="short_script", created__gte=now - timedelta(days=3)).exclude(parent__kind="short_script")[:6]
     flows = [_flow(r) for r in roots if not (r.result or {}).get("hidden")]
     active_flows = [f for f in flows if not f["done"]]
     week_videos = tasks.filter(kind="short_video", status="approved", updated__gte=week_ago).count()
+    posts = [p for p in tasks.filter(kind="publish_youtube", status="done") if (p.result or {}).get("stats")]
+    total_views = sum(p.result["stats"]["views"] for p in posts)
+    insights = [(p, i) for p in shown for i in (p.config or {}).get("insights", [])][:3]
     ctx = {
         "agents": agents,
         "focus": focus,
@@ -238,6 +271,7 @@ def home(request):
         "flows": active_flows[:4],
         "finished_flows": [f for f in flows if f["done"]][:3],
         "week_videos": week_videos,
+        "total_views": total_views, "posted_count": len(posts), "insights": insights,
         "spend_inr": int(spend * INR_PER_USD),
         "budget_inr": int(budget * INR_PER_USD),
         "video_mode": ((next((a for a in agents if a.key == "marketing"), None) or AgentCard()).config or {}).get("video", {}).get("mode", "images"),

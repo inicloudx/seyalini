@@ -170,7 +170,9 @@ def settings_home(request):
         "org_form": org_form, "member_form": member_form, "keys": keys,
         "members": Membership.objects.filter(tenant=t).select_related("user").order_by("user__username"),
         "roles": LABELS, "platform_keys": uses_platform_keys(t),
-        "youtube": (t.settings or {}).get("youtube"), "yt_keys": yt_keys,
+        # "Connected" needs the login token too: tenant.yaml can carry a channel name from another machine
+        "youtube": (t.settings or {}).get("youtube") if get_secret(t, "YOUTUBE_REFRESH_TOKEN") else None,
+        "yt_keys": yt_keys,
         "youtube_ready": bool(get_secret(t, "YOUTUBE_CLIENT_ID") and get_secret(t, "YOUTUBE_CLIENT_SECRET")),
         "youtube_redirect": _yt_redirect(request),
     })

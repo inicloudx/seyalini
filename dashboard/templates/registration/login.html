@@ -19,7 +19,7 @@ button{height:44px;border:0;border-radius:8px;background:#0F172A;color:#fff;font
   <label for="id_username">Username</label><input id="id_username" name="username" autocomplete="username" required autofocus>
   <label for="id_password">Password</label><input id="id_password" type="password" name="password" autocomplete="current-password" required>
   <button type="submit">Sign in</button>
-  {% if allow_signup %}<p style="font-size:13px">New here? <a href="/signup/">Create your organisation</a></p>{% endif %}
+  {% if allow_signup %}<p style="font-size:13px">New here? <a href="{% url 'dashboard:signup' %}">Create your organisation</a></p>{% endif %}
 </form>
 </body>
 </html>

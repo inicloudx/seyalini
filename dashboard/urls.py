@@ -13,6 +13,7 @@ urlpatterns = [
     path("videos/", views.videos, name="videos"),
     path("videos/<int:task_id>/delete/", views.video_delete, name="video_delete"),
     path("videos/cleanup/", views.videos_cleanup, name="videos_cleanup"),
+    path("videos/check/", views.analyst_now, name="analyst_now"),
     path("videos/<int:task_id>/publish/", views.video_publish, name="video_publish"),
     path("advanced/", views.advanced, name="advanced"),
     path("settings/", settings_views.settings_home, name="settings"),

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Seyalini{% endblock %}</title>
 <meta name="theme-color" content="#17171A">
-<link rel="manifest" href="/manifest.webmanifest">
+<link rel="manifest" href="{% url 'manifest' %}">
 <link rel="icon" href="{% static 'dashboard/icon-192.png' %}">
 <link rel="apple-touch-icon" href="{% static 'dashboard/icon-192.png' %}">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -131,7 +131,7 @@ details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-
   <main>{% block content %}{% endblock %}</main>
 </div>
 <script>
-if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(function(){}); }
+if ("serviceWorker" in navigator) { navigator.serviceWorker.register("{% url 'sw' %}").catch(function(){}); }
 </script>
 </body>
 </html>

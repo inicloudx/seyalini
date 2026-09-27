@@ -28,7 +28,9 @@ def plan_next(product: Product, slot: str = "any") -> dict:
     last_seen = {}
     for i, p in enumerate(history):
         last_seen.setdefault(p.get("pillar"), i)
-    pillar = max(pillars, key=lambda p: last_seen.get(p["key"], 10_000))
+    # the Analyst's scores (views vs average) make winning ideas come round more often
+    scores = cfg.get("pillar_scores") or {}
+    pillar = max(pillars, key=lambda p: (last_seen.get(p["key"], 10_000) + 1) * float(scores.get(p["key"], 1.0)))
 
     plan = {"pillar": pillar["key"], "pillar_name": pillar["name"], "pillar_idea": pillar.get("idea", ""), "slot": slot}
 

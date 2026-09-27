@@ -1,0 +1,9 @@
+# Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
+key: analyst
+name: Analyst
+role: Watches views on every posted Short and tells the team which ideas work
+status: active
+autonomy: 3                 # only reads numbers; changes nothing public
+model: gemini/gemini-3.5-flash-lite
+monthly_budget_usd: 0       # YouTube statistics are free
+changelog: Daily YouTube views, likes and comments; scores content ideas

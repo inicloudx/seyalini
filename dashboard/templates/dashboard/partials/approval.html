@@ -7,13 +7,13 @@
   <h3>{{ s.title|cut:"[Sample] " }}</h3>
 
   {% if task.kind == "short_video" %}
-  <video controls playsinline preload="metadata" poster="/media/{{ s.thumbnail }}" style="width:100%;max-width:340px;aspect-ratio:9/16;border-radius:14px;background:#000;align-self:center">
-    <source src="/media/{{ s.video }}" type="video/mp4">
+  <video controls playsinline preload="metadata" poster="{{ MEDIA_URL }}{{ s.thumbnail }}" style="width:100%;max-width:340px;aspect-ratio:9/16;border-radius:14px;background:#000;align-self:center">
+    <source src="{{ MEDIA_URL }}{{ s.video }}" type="video/mp4">
   </video>
   <p style="margin:0">{{ s.caption }}</p>
   <details><summary class="small muted">Details ▾</summary>
     <p class="small muted" style="margin:8px 0 0">{{ s.seconds|floatformat:0 }} seconds · {{ s.hashtags|join:" " }}{% if s.voice %} · voice-over{% else %} · no voice{% endif %}{% if not s.music %} · no music yet{% endif %}</p>
-    <a class="small" href="/media/{{ s.video }}" download>Download video</a>
+    <a class="small" href="{{ MEDIA_URL }}{{ s.video }}" download>Download video</a>
   </details>
   {% else %}
   <blockquote style="margin:0;padding:12px 14px;border-left:4px solid var(--accent);background:var(--panel2);border-radius:0 12px 12px 0;font-size:17px;font-weight:600">“{{ s.hook }}”</blockquote>

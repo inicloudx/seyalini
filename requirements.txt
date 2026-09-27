@@ -10,3 +10,4 @@ google-genai>=2.25   # 2.25+ needed for voice-over (Interactions API)
 Pillow>=10.1
 imageio-ffmpeg>=0.5
 cryptography>=42
+gunicorn>=22

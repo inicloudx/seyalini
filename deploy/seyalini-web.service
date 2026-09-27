@@ -1,0 +1,15 @@
+# /etc/systemd/system/seyalini-web.service
+[Unit]
+Description=Seyalini dashboard (gunicorn)
+After=network.target
+
+[Service]
+User=seyalini
+Group=seyalini
+WorkingDirectory=/opt/seyalini/app
+EnvironmentFile=/opt/seyalini/app/.env
+ExecStart=/opt/seyalini/venv/bin/gunicorn config.wsgi --bind 127.0.0.1:8010 --workers 2 --timeout 120
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

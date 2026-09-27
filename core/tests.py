@@ -1,5 +1,8 @@
 """Run: python manage.py test   (uses dry-run AI, costs nothing)"""
 import tempfile
+from datetime import timedelta
+
+from django.utils import timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -13,6 +16,40 @@ from core.models import AgentCard, Approval, Event, Product, Rule, Task, Tenant
 
 
 TMP_MEDIA = tempfile.mkdtemp(prefix="seyalini-test-media-")
+TMP_TENANTS = Path(tempfile.mkdtemp(prefix="seyalini-test-tenants-")) / "tenants"
+TEST_APPS = {"alphamagic"}  # the only app the tests expect; extra copies made on a laptop are left out
+
+
+def _copy_tenants():
+    """A clean copy of tenants/: only the known app, and no YouTube channel connected on a laptop."""
+    import shutil
+
+    import yaml
+    from django.conf import settings as dj
+
+    if TMP_TENANTS.exists():
+        shutil.rmtree(TMP_TENANTS)
+    shutil.copytree(Path(dj.BASE_DIR) / "tenants", TMP_TENANTS)
+    for products in TMP_TENANTS.glob("*/products"):
+        for app in products.iterdir():
+            if app.is_dir() and app.name not in TEST_APPS:
+                shutil.rmtree(app)
+    for meta in TMP_TENANTS.glob("*/tenant.yaml"):
+        data = yaml.safe_load(meta.read_text(encoding="utf-8")) or {}
+        if (data.get("settings") or {}).pop("youtube", None) is not None:
+            meta.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+_tenants_override = override_settings(TENANTS_DIR=TMP_TENANTS)
+
+
+def setUpModule():
+    _copy_tenants()
+    _tenants_override.enable()  # every test reads the clean copy, never the real tenants/ folder
+
+
+def tearDownModule():
+    _tenants_override.disable()
 
 
 @override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
@@ -26,7 +63,7 @@ class FoundationTests(TestCase):
 
     def test_tenant_loaded_with_brief_and_agents(self):
         self.assertIn("AlphaMagic", self.product.brief)
-        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 5)
+        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 6)
 
     def test_agent_change_creates_new_version_and_keeps_old(self):
         card, change = sync_agent(self.tenant, {"key": "marketing", "name": "Marketing", "status": "active",
@@ -158,17 +195,6 @@ class VideoTests(TestCase):
         self.assertTrue(Task.objects.filter(kind="short_video", status="failed").exists())
 
 
-TMP_TENANTS = Path(tempfile.mkdtemp(prefix="seyalini-test-tenants-")) / "tenants"
-
-
-def _copy_tenants():
-    import shutil
-
-    from django.conf import settings as dj
-
-    if TMP_TENANTS.exists():
-        shutil.rmtree(TMP_TENANTS)
-    shutil.copytree(Path(dj.BASE_DIR) / "tenants", TMP_TENANTS)
 
 
 @override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA, TENANTS_DIR=TMP_TENANTS)
@@ -455,7 +481,7 @@ class MultiTenantTests(TestCase):
     def test_new_org_gets_owner_and_default_team(self):
         tenant, owner = self._make_org()
         self.assertEqual(tenant.memberships.get(user=owner).role, "owner")
-        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 5)
+        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 6)
         self.assertTrue(AgentCard.objects.get(tenant=tenant, key="marketing").status == "active")
 
     def test_orgs_cannot_see_each_other(self):
@@ -679,3 +705,105 @@ class PublisherTests(TestCase):
         from core.secrets import set_secret
         set_secret(self.tenant, "YOUTUBE_CLIENT_ID", "")
         self.assertContains(self.client.get("/settings/"), "/settings/youtube/callback/")
+
+
+@override_settings(LLM_DRY_RUN=False, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class AnalystTests(TestCase):
+    """The Analyst reads YouTube numbers and steers the planner towards ideas that work."""
+
+    def setUp(self):
+        from core.secrets import set_secret
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.product = Product.objects.get(slug="alphamagic")
+        for k, v in {"GEMINI_API_KEY": "g-key-123456", "YOUTUBE_CLIENT_ID": "cid", "YOUTUBE_CLIENT_SECRET": "sec",
+                     "YOUTUBE_REFRESH_TOKEN": "refresh-123456"}.items():
+            set_secret(self.tenant, k, v)
+        old = timezone.now() - timedelta(days=2)
+        self.views = {}
+        for i, (pillar, views) in enumerate([("parent_tip", 900), ("parent_tip", 1100),
+                                             ("letter_of_the_day", 100), ("letter_of_the_day", 140)]):
+            script = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing",
+                                         kind="short_script", title=f"s{i}", status="approved", payload={"pillar": pillar})
+            video = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing", kind="short_video",
+                                        title=f"v{i}", status="approved", parent=script, result={"title": f"Short {i}"})
+            pub = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="publisher", kind="publish_youtube",
+                                      title=f"YouTube: Short {i}", status="done", parent=video,
+                                      result={"video_id": f"vid{i}", "url": f"https://youtube.com/shorts/vid{i}"})
+            Task.objects.filter(id=pub.id).update(created=old)
+            self.views[f"vid{i}"] = {"views": views, "likes": 3, "comments": 0, "privacy": "public"}
+
+    def _run(self):
+        from unittest import mock
+
+        from agents.analyst import analyst
+        from tools import youtube
+
+        with mock.patch.object(youtube, "access_token", return_value="tok"), \
+             mock.patch.object(youtube, "video_stats", return_value=self.views):
+            return analyst.run(self.tenant)
+
+    def test_collects_views_and_scores_ideas(self):
+        self.assertEqual(self._run(), 4)
+        self.product.refresh_from_db()
+        scores = self.product.config["pillar_scores"]
+        self.assertGreater(scores["parent_tip"], 1.5)
+        self.assertLess(scores["letter_of_the_day"], 0.5)
+        self.assertIn("Parent Tip", self.product.config["insights"][0])
+        self.client.force_login(self.user)
+        page = self.client.get("/").content.decode()
+        self.assertIn("What the AI learned", page)
+        self.assertIn("2240", page)  # total views this week card
+
+    def test_planner_prefers_winning_ideas(self):
+        from agents.marketing.planner import plan_next
+
+        Task.objects.filter(kind="short_script").delete()
+        keys = [p["key"] for p in self.product.config["pillars"]]
+        others = [k for k in keys if k != "parent_tip"]
+        newest_first = others[:2] + ["parent_tip"] + others[2:]
+        base = timezone.now()
+        for age, key in enumerate(newest_first):
+            t = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing",
+                                    kind="short_script", title=key, status="approved", payload={"pillar": key})
+            Task.objects.filter(id=t.id).update(created=base - timedelta(hours=age))
+        self.assertNotEqual(plan_next(self.product)["pillar"], "parent_tip")   # plain rotation
+        cfg = dict(self.product.config)
+        cfg["pillar_scores"] = {"parent_tip": 3.0}
+        self.product.config = cfg
+        self.assertEqual(plan_next(self.product)["pillar"], "parent_tip")      # the winner comes round sooner
+
+    def test_description_has_tracked_store_link(self):
+        from agents.publisher.youtube_publisher import build_metadata
+
+        video = Task.objects.filter(kind="short_video").first()
+        self.assertIn("utm_source%3Dyoutube", build_metadata(video)["description"])
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA, FORCE_SCRIPT_NAME="/seyalini",
+                   STATIC_URL="/seyalini/static/", MEDIA_URL="/seyalini/media/")
+class SubPathTests(TestCase):
+    """Served at https://inixr.com/seyalini: every link must carry the /seyalini prefix."""
+
+    def setUp(self):
+        from django.urls import set_script_prefix
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.client.force_login(self.user)
+        set_script_prefix("/seyalini/")  # what gunicorn's WSGI handler does with FORCE_SCRIPT_NAME
+        self.addCleanup(set_script_prefix, "/")
+
+    def test_links_carry_prefix(self):
+        page = self.client.get("/").content.decode()
+        for needle in ('href="/seyalini/videos/"', 'href="/seyalini/manifest.webmanifest"',
+                       '/seyalini/static/dashboard/htmx.min.js', 'register("/seyalini/sw.js")'):
+            self.assertIn(needle, page)
+        self.assertNotIn('href="/videos/"', page)
+        self.assertEqual(self.client.get("/manifest.webmanifest").json()["start_url"], "/seyalini/")
+
+    def test_youtube_redirect_uses_prefix(self):
+        page = self.client.get("/settings/").content.decode()
+        self.assertIn("/seyalini/settings/youtube/callback/", page)

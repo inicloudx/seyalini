@@ -2,7 +2,7 @@
 {% block title %}Advanced · Seyalini{% endblock %}
 {% block content %}
 <section class="stack" style="gap:6px"><h1>Advanced</h1><p class="muted" style="margin:0">The engine room: your AI team, budgets, what they learned and everything they did.</p></section>
-<div class="row">{% if is_owner %}<a class="btn small" href="{% url 'dashboard:settings' %}">← Settings</a>{% endif %}{% if user.is_superuser %}<a class="btn small" href="{% url 'dashboard:platform' %}">Platform (all organisations)</a><a class="btn small" href="/admin/">Database admin</a>{% endif %}</div>
+<div class="row">{% if is_owner %}<a class="btn small" href="{% url 'dashboard:settings' %}">← Settings</a>{% endif %}{% if user.is_superuser %}<a class="btn small" href="{% url 'dashboard:platform' %}">Platform (all organisations)</a><a class="btn small" href="{% url 'admin:index' %}">Database admin</a>{% endif %}</div>
 
 <section class="card stack">
   <h2>AI team</h2>

@@ -26,8 +26,10 @@ def build_metadata(video_task: Task) -> dict:
     store = cfg.get("store_url", "")
     hashtags = " ".join(r.get("hashtags", [])[:5])
     lines = [r.get("caption") or r.get("title", "")]
-    if store:
-        lines += ["", f"Download {product.name}: {store}"]
+    if store:  # the referrer lets Play Console count installs that came from these Shorts
+        sep = "&" if "?" in store else "?"
+        tracked = f"{store}{sep}referrer=utm_source%3Dyoutube%26utm_medium%3Dshorts%26utm_campaign%3Dseyalini"
+        lines += ["", f"Download {product.name}: {tracked}"]
     lines += ["", f"{hashtags} #Shorts".strip()]
     return {"title": (r.get("title") or product.name).replace("[Sample] ", "")[:100], "description": "\n".join(lines),
             "tags": tags + [product.name], "made_for_kids": bool(cfg.get("youtube_made_for_kids", False))}

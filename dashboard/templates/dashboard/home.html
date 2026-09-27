@@ -113,10 +113,18 @@
     </section>
     {% endif %}
 
+    {% if insights %}
+    <section class="card stack" aria-label="What the AI learned" style="background:var(--info-bg);border-color:transparent">
+      <h2 style="color:var(--info)">What the AI learned</h2>
+      {% for p, i in insights %}<p style="margin:0;color:var(--info)" class="small">{% if products|length > 1 %}<b>{{ p.name }}:</b> {% endif %}{{ i }}</p>{% endfor %}
+    </section>
+    {% endif %}
+
     <section class="card stack" aria-label="This week">
       <h2>This week</h2>
-      <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px">
         <div><div style="font-size:24px;font-weight:750">{{ week_videos }}</div><div class="muted small">videos ready</div></div>
+        <div><div style="font-size:24px;font-weight:750">{{ total_views }}</div><div class="muted small">YouTube views ({{ posted_count }} Short{{ posted_count|pluralize }})</div></div>
         <div><div style="font-size:24px;font-weight:750">{{ kpi.scripts_week }}<span class="muted" style="font-size:14px"> / {{ kpi.target }}</span></div><div class="muted small">Shorts made</div></div>
         <div><div style="font-size:24px;font-weight:750">₹{{ spend_inr }}</div><div class="muted small">of ₹{{ budget_inr }} budget</div></div>
       </div>
