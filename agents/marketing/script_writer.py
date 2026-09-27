@@ -28,12 +28,14 @@ Hard rules:
 - Every scene has a `voiceover`: what a warm narrator SAYS in that scene, at most 16 words so it fits in 8 seconds.
   Spoken words only (no stage directions, no emojis). The last scene's voiceover invites parents to download the app.
 - End with a call to action to download the app.
+- If a proven pattern is given, build the Short on that pattern (copy the pattern, never another creator's content).
 - Follow the brand brief and EVERY learned rule below.
 
 Reply with ONLY a JSON object:
 {{"title": str, "hook": str,
   "scenes": [{{"seconds": int, "veo_prompt": str, "on_screen_text": str, "voiceover": str}}],
-  "end_card": str, "caption": str, "hashtags": [str], "music_mood": str}}"""
+  "end_card": str, "caption": str, "hashtags": [str], "music_mood": str, "pattern": str}}
+`pattern` = the name of the proven pattern you followed, or "" if none was given."""
 
 
 def _user_prompt(product: Product, plan: dict, rules: list[str], avoid: list[str], redo: dict | None) -> str:
@@ -45,6 +47,10 @@ def _user_prompt(product: Product, plan: dict, rules: list[str], avoid: list[str
                          f"build the video around '{plan['letter']} for {plan['word']}' and do not use a different word.")
         else:
             parts.append(f"Letter: {plan['letter']} (build the video around this letter and a word starting with it)")
+    if plan.get("pattern"):
+        pat = plan["pattern"]
+        parts.append(f"# Proven pattern to follow (from today's most-viewed Shorts, found by the Scout)\n"
+                     f"Name: {pat['name']}\nRecipe: {pat['recipe']}\nExample hook: {pat.get('hook_example', '')}")
     parts.append("# Learned rules (from the founder's past feedback)\n" + ("\n".join(f"- {r}" for r in rules) or "- none yet"))
     if avoid:
         parts.append("# Recent titles - do NOT repeat these ideas\n" + "\n".join(f"- {t}" for t in avoid))
@@ -82,7 +88,7 @@ def _sample_script(plan: dict, product: Product, scenes: int) -> str:
         "end_card": f"Download {product.name} - link in bio",
         "caption": f"{letter} is for {word}! Watch letters come alive in AR with {product.name}.",
         "hashtags": ["#AlphaMagicAR", "#LearnABC", "#KidsLearning", "#ARforKids", f"#Letter{letter}"],
-        "music_mood": "playful ukulele",
+        "music_mood": "playful ukulele", "pattern": (plan.get("pattern") or {}).get("name", ""),
     })
 
 

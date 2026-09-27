@@ -90,3 +90,46 @@ def video_stats(token: str, video_ids: list[str]) -> dict:
                              "comments": int(st.get("commentCount", 0)),
                              "privacy": it.get("status", {}).get("privacyStatus", "")}
     return out
+
+
+# --- market research (Scout) ---------------------------------------------------------------
+def search_shorts(token: str, query: str, *, days: int = 30, max_results: int = 15) -> list[str]:
+    """Most-viewed short videos for a search term, published in the last `days` (100 quota units)."""
+    from datetime import datetime, timedelta, timezone
+
+    after = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    items = _check(httpx.get(f"{API}/search", params={
+        "part": "id", "type": "video", "q": query, "order": "viewCount", "videoDuration": "short",
+        "publishedAfter": after, "maxResults": max_results, "safeSearch": "strict", "relevanceLanguage": "en"},
+        headers={"Authorization": f"Bearer {token}"}, timeout=30)).json().get("items") or []
+    return [it["id"]["videoId"] for it in items if it.get("id", {}).get("videoId")]
+
+
+def _seconds(iso: str) -> int:
+    """ISO 8601 duration (PT1M5S) -> seconds."""
+    import re
+
+    m = re.fullmatch(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso or "")
+    if not m:
+        return 0
+    d, h, mi, s = (int(x or 0) for x in m.groups())
+    return ((d * 24 + h) * 60 + mi) * 60 + s
+
+
+def video_details(token: str, video_ids: list[str]) -> list[dict]:
+    """Title, channel, length and numbers for any public videos (1 quota unit per 50)."""
+    out = []
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i:i + 50]
+        items = _check(httpx.get(f"{API}/videos", params={"part": "snippet,statistics,contentDetails", "id": ",".join(batch)},
+                                 headers={"Authorization": f"Bearer {token}"}, timeout=30)).json().get("items") or []
+        for it in items:
+            sn, st = it.get("snippet", {}), it.get("statistics", {})
+            out.append({"id": it["id"], "title": sn.get("title", ""), "channel": sn.get("channelTitle", ""),
+                        "channel_id": sn.get("channelId", ""), "published": sn.get("publishedAt", ""),
+                        "description": (sn.get("description") or "")[:600], "tags": (sn.get("tags") or [])[:15],
+                        "seconds": _seconds(it.get("contentDetails", {}).get("duration", "")),
+                        "views": int(st.get("viewCount", 0)), "likes": int(st.get("likeCount", 0)),
+                        "comments": int(st.get("commentCount", 0)),
+                        "url": f"https://www.youtube.com/shorts/{it['id']}"})
+    return out

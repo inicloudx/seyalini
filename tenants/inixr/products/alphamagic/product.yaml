@@ -16,6 +16,15 @@ config:
   - facebook_reels
   youtube_made_for_kids: true
   shorts_per_day: 1
+  # Scout: YouTube search terms to study every morning (kids' content + what parents search)
+  scout_about: an Android AR alphabet app where each letter becomes a 3D scene in your room (A for Aeroplane...)
+  scout_queries:
+  - abc song for kids
+  - alphabet learning for toddlers
+  - phonics for kids
+  - AR app for kids
+  - learning apps for kids
+  - toddler learning at home
   topic_repeat_days: 7
   pillars:
   - key: letter_of_the_day

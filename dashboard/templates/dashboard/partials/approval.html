@@ -17,6 +17,7 @@
   </details>
   {% else %}
   <blockquote style="margin:0;padding:12px 14px;border-left:4px solid var(--accent);background:var(--panel2);border-radius:0 12px 12px 0;font-size:17px;font-weight:600">“{{ s.hook }}”</blockquote>
+  {% if s.pattern %}<p class="small" style="margin:0;color:var(--info)">Proven pattern: <b>{{ s.pattern }}</b> (from today's top Shorts)</p>{% endif %}
   <ol style="margin:0;padding-left:20px" class="stack small">
     {% for sc in s.scenes %}<li style="margin:0">{{ sc.on_screen_text }}</li>{% endfor %}
   </ol>

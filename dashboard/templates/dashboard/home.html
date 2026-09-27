@@ -120,6 +120,34 @@
     </section>
     {% endif %}
 
+    {% if scouting %}
+    {% for p, sc in scouting %}
+    <section class="card stack" aria-label="What's working on YouTube">
+      <div class="row" style="justify-content:space-between"><h2>What's working on YouTube</h2>
+        {% if can_review %}<form method="post" action="{% url 'dashboard:scout_now' %}">{% csrf_token %}<button class="btn small">↻ Study again</button></form>{% endif %}</div>
+      <p style="margin:0">{% if scouting|length > 1 %}<b>{{ p.name }}:</b> {% endif %}{{ sc.summary }}</p>
+      {% if sc.patterns %}<div class="stack" style="gap:6px">
+        <span class="small muted">Proven patterns your next scripts will use</span>
+        {% for pat in sc.patterns %}<details><summary class="small"><b>{{ pat.name }}</b></summary>
+          <p class="small" style="margin:6px 0 0">{{ pat.recipe }}</p>
+          {% if pat.hook_example %}<p class="small muted" style="margin:4px 0 0">Hook for us: “{{ pat.hook_example }}”</p>{% endif %}</details>{% endfor %}
+      </div>{% endif %}
+      {% if sc.top %}<div class="stack" style="gap:8px">
+        <span class="small muted">Top Shorts this month</span>
+        {% for v in sc.top %}<div class="small"><a href="{{ v.url }}" target="_blank" rel="noopener">{{ v.title }}</a>
+          <span class="muted"> · {{ v.channel }} · {{ v.views_label }} views ({{ v.per_day_label }}/day)</span>
+          {% if v.why %}<div class="muted">{{ v.why }}</div>{% endif %}</div>{% endfor %}
+      </div>{% endif %}
+    </section>
+    {% endfor %}
+    {% elif writable and can_review %}
+    <section class="card row" aria-label="Scout" style="justify-content:space-between">
+      <div class="stack" style="gap:4px"><h2>What's working on YouTube</h2>
+        <span class="small muted">The Scout studies the most-viewed Shorts in your space so every script starts from a proven pattern.</span></div>
+      <form method="post" action="{% url 'dashboard:scout_now' %}">{% csrf_token %}<button class="btn small primary">Study top Shorts</button></form>
+    </section>
+    {% endif %}
+
     <section class="card stack" aria-label="This week">
       <h2>This week</h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px">

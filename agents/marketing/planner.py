@@ -45,4 +45,12 @@ def plan_next(product: Product, slot: str = "any") -> dict:
         word = (cfg.get("letter_words") or {}).get(plan["letter"])
         if word:
             plan["word"] = word  # the real scene in the app for this letter
+
+    # 3. a proven pattern from the Scout's playbook (least recently used first; strongest wins a tie)
+    patterns = (cfg.get("scout") or {}).get("patterns") or []
+    if patterns:
+        used = {}
+        for i, p in enumerate(history):
+            used.setdefault((p.get("pattern") or {}).get("name"), i)
+        plan["pattern"] = max(patterns, key=lambda p: (used.get(p["name"], 10_000), -patterns.index(p)))
     return plan

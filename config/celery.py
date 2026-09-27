@@ -7,11 +7,15 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 app = Celery("seyalini")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks(["agents.marketing", "agents.publisher", "agents.analyst"])
+app.autodiscover_tasks(["agents.marketing", "agents.publisher", "agents.analyst", "agents.scout"])
 
 # The company clock (India time). Scripts are written early so you can approve
 # them before the posting slots in Step 5 (9 AM and 6 PM).
 app.conf.beat_schedule = {
+    "scout-morning": {  # study today's top Shorts before the 7 AM script is written
+        "task": "agents.scout.tasks.run_scout",
+        "schedule": crontab(hour=6, minute=0),
+    },
     "marketing-morning-script": {
         "task": "agents.marketing.tasks.daily_scripts",
         "schedule": crontab(hour=7, minute=0),

@@ -63,7 +63,7 @@ class FoundationTests(TestCase):
 
     def test_tenant_loaded_with_brief_and_agents(self):
         self.assertIn("AlphaMagic", self.product.brief)
-        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 6)
+        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 7)
 
     def test_agent_change_creates_new_version_and_keeps_old(self):
         card, change = sync_agent(self.tenant, {"key": "marketing", "name": "Marketing", "status": "active",
@@ -481,7 +481,7 @@ class MultiTenantTests(TestCase):
     def test_new_org_gets_owner_and_default_team(self):
         tenant, owner = self._make_org()
         self.assertEqual(tenant.memberships.get(user=owner).role, "owner")
-        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 6)
+        self.assertEqual(AgentCard.objects.filter(tenant=tenant, is_current=True).count(), 7)
         self.assertTrue(AgentCard.objects.get(tenant=tenant, key="marketing").status == "active")
 
     def test_orgs_cannot_see_each_other(self):
@@ -807,3 +807,86 @@ class SubPathTests(TestCase):
     def test_youtube_redirect_uses_prefix(self):
         page = self.client.get("/settings/").content.decode()
         self.assertIn("/seyalini/settings/youtube/callback/", page)
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class ScoutTests(TestCase):
+    """The Scout studies top Shorts in our space and hands proven patterns to the script writer."""
+
+    def setUp(self):
+        from core.secrets import set_secret
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.tenant.settings = {**(self.tenant.settings or {}), "youtube": {"channel": "Ours", "channel_id": "OUR"}}
+        self.tenant.save()
+        self.product = Product.objects.get(slug="alphamagic")
+        for k, v in {"GEMINI_API_KEY": "g-key-123456", "YOUTUBE_CLIENT_ID": "cid", "YOUTUBE_CLIENT_SECRET": "sec",
+                     "YOUTUBE_REFRESH_TOKEN": "refresh-123456"}.items():
+            set_secret(self.tenant, k, v)
+        day = timezone.now() - timedelta(days=10)
+        iso = day.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        def video(vid, views, seconds=30, channel_id="THEM"):
+            return {"id": vid, "title": f"Top short {vid}", "channel": "Kids TV", "channel_id": channel_id, "published": iso,
+                    "description": "", "tags": [], "seconds": seconds, "views": views, "likes": 0, "comments": 0,
+                    "url": f"https://www.youtube.com/shorts/{vid}"}
+        self.videos = [video("slow", 10_000), video("hit", 5_000_000), video("long", 9_000_000, seconds=600),
+                       video("ours", 8_000_000, channel_id="OUR")]
+
+    def _run(self):
+        from unittest import mock
+
+        from agents.scout import scout
+        from tools import youtube
+
+        with mock.patch.object(youtube, "access_token", return_value="tok"), \
+             mock.patch.object(youtube, "search_shorts", return_value=[v["id"] for v in self.videos]), \
+             mock.patch.object(youtube, "video_details", return_value=self.videos):
+            return scout.run(self.tenant)
+
+    def test_studies_top_shorts_and_builds_playbook(self):
+        self.assertEqual(self._run(), 2)  # too-long and our own Shorts are skipped
+        self.product.refresh_from_db()
+        sc = self.product.config["scout"]
+        self.assertTrue(sc["patterns"] and sc["summary"])
+        self.assertEqual([v["title"] for v in sc["top"]], ["Top short hit", "Top short slow"])  # views per day
+        self.assertEqual(Task.objects.filter(kind="scout_video", status="done").count(), 2)
+        self.assertEqual(self._run(), 0)  # never studies the same Short twice
+
+    def test_scripts_follow_a_proven_pattern_in_turn(self):
+        from agents.marketing.planner import plan_next
+
+        cfg = dict(self.product.config)
+        cfg["scout"] = {"patterns": [{"name": "Guess the reveal", "recipe": "Ask, pause, reveal."},
+                                     {"name": "Before and after", "recipe": "Show bored, then amazed."}]}
+        self.product.config = cfg
+        self.product.save()
+        first = write_script(self.product)
+        self.assertEqual(first.payload["pattern"]["name"], "Guess the reveal")
+        self.assertEqual(first.result["pattern"], "Guess the reveal")
+        self.assertEqual(plan_next(self.product)["pattern"]["name"], "Before and after")  # rotates
+
+    def test_today_shows_what_works(self):
+        self._run()
+        self.client.force_login(self.user)
+        page = self.client.get("/").content.decode()
+        self.assertIn("What's working on YouTube", page)
+        self.assertIn("Top short hit", page)
+        self.assertIn("5M views", page)
+
+    @override_settings(LLM_DRY_RUN=False)
+    def test_reads_details_when_it_cannot_watch(self):
+        from unittest import mock
+
+        from agents.runtime import AgentRuntime
+        from agents.scout import scout
+
+        agent = AgentRuntime(self.tenant, "scout")
+        task = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="scout", kind="scout_video", title="x")
+        with mock.patch("tools.genai_client.client", side_effect=RuntimeError("private video")), \
+             mock.patch.object(AgentRuntime, "think", return_value='{"hook": "Wow (guess)", "why_it_works": "reveal"}'):
+            notes = scout._watch(agent, self.product, self.videos[1], task)
+        self.assertFalse(notes["watched"])
+        self.assertEqual(notes["hook"], "Wow (guess)")

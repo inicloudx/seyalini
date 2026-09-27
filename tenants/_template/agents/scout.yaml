@@ -1,0 +1,17 @@
+# Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
+key: scout
+name: Scout
+role: Studies the most-viewed Shorts in our space every morning and turns them into proven patterns for our scripts
+status: active
+autonomy: 3                 # only reads public videos; changes nothing public
+model: gemini/gemini-3.5-flash-lite   # watches YouTube links directly (~$0.01 per Short)
+monthly_budget_usd: 3       # ~5 Shorts a day + the playbook
+changelog: Daily market research on top Shorts; proven patterns for every script
+config:
+  patterns: 5               # proven patterns in the playbook
+  # search terms: set per app as `scout_queries` in product.yaml (these are the fallback)
+  queries:
+  - abc song for kids
+  - alphabet learning for toddlers
+  - phonics for kids
+  - AR app for kids

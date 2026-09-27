@@ -175,6 +175,42 @@ def _analyst_if_due(tenant):
         pass
 
 
+def _short_number(n) -> str:
+    n = int(n or 0)
+    for size, unit in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+        if n >= size:
+            return f"{n / size:.1f}".rstrip("0").rstrip(".") + unit
+    return str(n)
+
+
+def _scout_if_due(tenant):
+    """No scheduler on a laptop: study top Shorts in the background when the page opens (max once a day)."""
+    from agents.publisher.youtube_publisher import is_connected
+    from agents.scout.scout import is_due
+    from agents.scout.tasks import run_scout
+
+    try:
+        if is_connected(tenant) and not is_dry_run(tenant) and is_due(tenant):
+            enqueue(run_scout, tenant.id)
+    except Exception:  # research can wait; the dashboard must always open
+        pass
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def scout_now(request):
+    from agents.publisher.youtube_publisher import is_connected
+    from agents.scout.tasks import run_scout
+
+    if not is_connected(request.tenant):
+        messages.error(request, "Connect YouTube in Settings first: the Scout searches YouTube with it.")
+    else:  # watching 5 Shorts takes a minute or two, so run it in the background
+        enqueue(run_scout, request.tenant.id)
+        messages.success(request, "The Scout is studying today's top Shorts. Refresh in a couple of minutes.")
+    return redirect("dashboard:home")
+
+
 @login_required
 @require_role("reviewer")
 @require_POST
@@ -237,6 +273,7 @@ def home(request):
         p.pending_count = counts.get(p.id, 0)
     dry = is_dry_run(t)
     _analyst_if_due(t)
+    _scout_if_due(t)
     steps, next_step, done = _next_steps(t, products, dry, request)
     roots = tasks.filter(kind="short_script", created__gte=now - timedelta(days=3)).exclude(parent__kind="short_script")[:6]
     flows = [_flow(r) for r in roots if not (r.result or {}).get("hidden")]
@@ -245,6 +282,13 @@ def home(request):
     posts = [p for p in tasks.filter(kind="publish_youtube", status="done") if (p.result or {}).get("stats")]
     total_views = sum(p.result["stats"]["views"] for p in posts)
     insights = [(p, i) for p in shown for i in (p.config or {}).get("insights", [])][:3]
+    scouting = []
+    for p in shown:
+        sc = dict((p.config or {}).get("scout") or {})
+        if sc:
+            sc["top"] = [{**v, "views_label": _short_number(v.get("views", 0)),
+                          "per_day_label": _short_number(v.get("views_per_day", 0))} for v in sc.get("top") or []][:3]
+            scouting.append((p, sc))
     ctx = {
         "agents": agents,
         "focus": focus,
@@ -272,6 +316,7 @@ def home(request):
         "finished_flows": [f for f in flows if f["done"]][:3],
         "week_videos": week_videos,
         "total_views": total_views, "posted_count": len(posts), "insights": insights,
+        "scouting": scouting,
         "spend_inr": int(spend * INR_PER_USD),
         "budget_inr": int(budget * INR_PER_USD),
         "video_mode": ((next((a for a in agents if a.key == "marketing"), None) or AgentCard()).config or {}).get("video", {}).get("mode", "images"),

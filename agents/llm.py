@@ -20,14 +20,19 @@ FALLBACK_PRICES = {
 }
 
 
-def _fallback_cost(model: str, resp) -> Decimal:
+def token_cost(model: str, tokens_in: int, tokens_out: int) -> Decimal:
+    """Price of a call made outside LiteLLM (e.g. Gemini watching a video)."""
     price = FALLBACK_PRICES.get(model.split("/")[-1])
-    usage = getattr(resp, "usage", None)
-    if not price or usage is None:
+    if not price:
         return Decimal("0")
-    tin = getattr(usage, "prompt_tokens", 0) or 0
-    tout = getattr(usage, "completion_tokens", 0) or 0
-    return Decimal(str((tin * price[0] + tout * price[1]) / 1_000_000))
+    return Decimal(str(((tokens_in or 0) * price[0] + (tokens_out or 0) * price[1]) / 1_000_000))
+
+
+def _fallback_cost(model: str, resp) -> Decimal:
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return Decimal("0")
+    return token_cost(model, getattr(usage, "prompt_tokens", 0), getattr(usage, "completion_tokens", 0))
 
 
 @dataclass
