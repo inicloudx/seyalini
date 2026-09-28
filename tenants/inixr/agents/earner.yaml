@@ -6,13 +6,18 @@ status: active
 autonomy: 1                 # proposes and drafts only; it never spends money or signs up for anything by itself
 model: gemini/gemini-3.5-flash-lite
 monthly_budget_usd: 3       # AI cost of thinking (~weekly hunt + plans + reviews). Money for experiments is separate, below.
-changelog: First version - opportunity hunt in any field, 14-day experiments, money ledger, scale or stop
+changelog: Builds its own team - proposes worker agents for experiments, within team limits
 config:
   ideas_per_hunt: 5
   experiment_budget_inr: 2000   # the most one experiment may ask you to spend
   experiment_days: 14           # how long a test runs before the Earner says scale or stop
   owner_hours_per_week: 5       # your time it may ask for, per experiment
   web_research: true            # Gemini searches the web for what is selling right now
+  # Its own team: new worker agents it may propose (each needs your yes). Workers draft only.
+  max_agents: 5                 # active worker agents at once
+  max_agents_per_plan: 2        # new agents per experiment (at start, and again when it scales)
+  max_agent_budget_usd: 2       # the most one worker may cost a month
+  max_team_budget_usd: 10       # the most all workers together may cost a month
   # Beyond what we already do: the Earner must find money OUTSIDE these fields.
   avoid_fields:
   - AR apps and mobile apps for kids

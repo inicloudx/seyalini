@@ -70,6 +70,7 @@
         <a class="btn primary" href="{% url 'dashboard:product' task.product.slug %}">Review the brief</a>
       </article>
       {% elif task.kind == "money_idea" %}{% include "dashboard/partials/money_idea.html" %}
+      {% elif task.kind == "agent_proposal" or task.kind == "work_output" %}{% include "dashboard/partials/team_item.html" %}
       {% else %}{% include "dashboard/partials/approval.html" %}{% endif %}
     {% empty %}
       <div class="card" style="text-align:center;padding:28px 18px">
@@ -118,7 +119,7 @@
     <section class="card stack" aria-label="Money">
       <div class="row" style="justify-content:space-between"><h2>Money</h2><a class="btn small" href="{% url 'dashboard:money' %}">Open →</a></div>
       <p class="muted small" style="margin:0">The Earner looks for new ways to earn in any field.{% if money.ideas %} <b style="color:var(--ink)">{{ money.ideas }} new idea{{ money.ideas|pluralize }} waiting.</b>{% endif %}</p>
-      <div class="row small" style="gap:6px"><span class="pill ok">Earned ₹{{ money.earned }}</span><span class="pill {% if money.profit < 0 %}bad{% endif %}">Profit ₹{{ money.profit }}</span><span class="pill">{{ money.running }} test{{ money.running|pluralize }} running</span></div>
+      <div class="row small" style="gap:6px"><span class="pill ok">Earned ₹{{ money.earned }}</span><span class="pill {% if money.profit < 0 %}bad{% endif %}">Profit ₹{{ money.profit }}</span><span class="pill">{{ money.running }} test{{ money.running|pluralize }} running</span>{% if money.agents %}<span class="pill info">{{ money.agents }} agent{{ money.agents|pluralize }} working</span>{% endif %}</div>
     </section>
     {% endif %}
 

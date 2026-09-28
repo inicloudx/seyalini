@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from agents.earner import earner
+from agents.earner import earner, team
 from core.jobs import enqueue
 from core.models import AgentCard, Event, Task
 from core.roles import require_role
@@ -28,7 +28,8 @@ def money_summary(tenant) -> dict:
         earned, spent = earned + t["earned"], spent + t["spent"]
     return {"earned": earned, "spent": spent, "profit": earned - spent,
             "running": sum(1 for p in plans if (p.result or {}).get("state") in ("running", "scaling")),
-            "ideas": Task.objects.filter(tenant=tenant, kind="money_idea", status="awaiting_approval").count()}
+            "ideas": Task.objects.filter(tenant=tenant, kind="money_idea", status="awaiting_approval").count(),
+            "agents": len(team.workers(tenant, active_only=True))}
 
 
 @login_required
@@ -39,6 +40,13 @@ def money(request):
     ideas = list(Task.objects.filter(tenant=t, kind="money_idea", status="awaiting_approval"))
     for i in ideas:
         i.chips = IDEA_CHIPS
+    team_items = list(Task.objects.filter(tenant=t, kind__in=["agent_proposal", "work_output"], status="awaiting_approval"))
+    for i in team_items:
+        i.chips = REASON_CHIPS[i.kind]
+    crew = [c for c in team.workers(t) if c.status != "planned"]
+    for c in crew:
+        c.spent = c.spent_this_month()
+        c.last = Task.objects.filter(tenant=t, agent_key=c.key, kind="work_output").first()
     plans = list(Task.objects.filter(tenant=t, kind="money_plan").exclude(status="failed").select_related("parent"))
     for p in plans:
         p.totals = earner.ledger_totals(p)
@@ -47,7 +55,7 @@ def money(request):
     plans.sort(key=lambda p: (order.get(p.state, 9), -p.id))
     card = _earner(t)
     return render(request, "dashboard/money.html", {
-        "ideas": ideas, "plans": plans, "summary": money_summary(t), "card": card,
+        "ideas": ideas, "plans": plans, "team_items": team_items, "crew": crew, "summary": money_summary(t), "card": card,
         "cfg": (card.config if card else {}) or {},
         "events": Event.objects.filter(tenant=t, agent_key="earner").exclude(kind="llm_call").select_related("task")[:15],
     })
@@ -106,4 +114,30 @@ def money_review(request, task_id):
             messages.success(request, f"The Earner says: {r['verdict']}. {r.get('why', '')}")
     except Exception as exc:
         messages.error(request, f"Could not review now: {str(exc)[:200]}")
+    return redirect("dashboard:money")
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def agent_run(request, key):
+    from agents.worker.tasks import run_worker
+
+    card = get_object_or_404(AgentCard, tenant=request.tenant, key=key, is_current=True, config__kind="worker")
+    if card.status != "active":
+        messages.error(request, f"{card.name} is paused. Restart it first.")
+    else:
+        enqueue(run_worker, request.tenant.id, card.key)
+        messages.success(request, f"{card.name} is working. Its draft appears here in a minute.")
+    return redirect("dashboard:money")
+
+
+@login_required
+@require_role("owner")
+@require_POST
+def agent_toggle(request, key):
+    card = get_object_or_404(AgentCard, tenant=request.tenant, key=key, is_current=True, config__kind="worker")
+    new = team.set_status(card, "paused" if card.status == "active" else "active",
+                          "Paused by you" if card.status == "active" else "Restarted by you")
+    messages.success(request, f"{new.name} is {'working again' if new.status == 'active' else 'paused'}.")
     return redirect("dashboard:money")

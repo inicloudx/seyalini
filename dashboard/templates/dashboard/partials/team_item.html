@@ -1,0 +1,47 @@
+{% with r=task.result %}
+<article class="card stack" id="task-{{ task.id }}">
+  <div class="row" style="justify-content:space-between;gap:6px">
+    {% if task.kind == "agent_proposal" %}<span class="pill" style="color:var(--idea)">New agent for your team</span>
+    {% else %}<span class="pill info">Draft from {{ r.agent_name }}</span>{% endif %}
+    <span class="muted small">{{ r.experiment|truncatechars:40 }} · {{ task.created|timesince }} ago</span>
+  </div>
+  {% if task.kind == "agent_proposal" %}
+  <h3>{{ r.name }}</h3>
+  <p style="margin:0">{{ r.role }}</p>
+  <div class="row small" style="gap:6px"><span class="pill">Works every {{ r.every }}</span><span class="pill">Up to ${{ r.monthly_budget_usd }} a month</span></div>
+  {% if r.why %}<p class="small" style="margin:0;color:var(--info)">Why: {{ r.why }}</p>{% endif %}
+  <details><summary class="small muted">Its instructions ▾</summary><p class="small" style="margin:8px 0 0">{{ r.instructions }}</p></details>
+  {% else %}
+  <h3>{{ task.title }}</h3>
+  {% if r.note_for_owner %}<p class="small" style="margin:0;color:var(--info)">{{ r.note_for_owner }}</p>{% endif %}
+  {% for d in r.items %}<div class="stack small" style="gap:4px"><b>{{ d.title }}</b><textarea readonly rows="4" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel2);color:var(--ink);font:inherit">{{ d.text }}</textarea></div>{% endfor %}
+  {% endif %}
+
+  {% if can_review %}
+  <form hx-post="{% url 'dashboard:decide' task.id %}" hx-target="#task-{{ task.id }}" hx-swap="outerHTML" hx-disabled-elt="find button"
+        method="post" action="{% url 'dashboard:decide' task.id %}" class="stack">
+    {% csrf_token %}
+    <button class="btn good wide" name="decision" value="approved">{% if task.kind == "agent_proposal" %}✓ Yes, add this agent{% else %}✓ Good, I'll use it{% endif %}</button>
+    {% if task.kind == "work_output" %}
+    <details>
+      <summary class="btn wide" style="display:flex">Change something</summary>
+      <div class="stack" style="margin-top:10px">
+        <fieldset style="border:0;padding:0;margin:0" class="row">
+          <legend class="small muted" style="margin-bottom:6px">What should change? {{ r.agent_name }} remembers this.</legend>
+          {% for c in task.chips %}<label class="chip"><input type="radio" name="chip" value="{{ c }}"> {{ c }}</label>{% endfor %}
+        </fieldset>
+        <input name="reason" aria-label="Or say it in your words" placeholder="Or say it in your words" style="min-height:48px;border:1px solid var(--line);border-radius:12px;padding:0 14px;background:var(--panel);color:var(--ink);font:inherit">
+        <button class="btn primary wide" name="decision" value="redo">Send back to redo</button>
+      </div>
+    </details>
+    {% else %}
+    <details>
+      <summary class="small muted">Say why not (optional) ▾</summary>
+      <div class="row" style="margin-top:8px">{% for c in task.chips %}<label class="chip"><input type="radio" name="chip" value="{{ c }}"> {{ c }}</label>{% endfor %}</div>
+    </details>
+    {% endif %}
+    <button class="btn wide" name="decision" value="discarded" style="color:var(--bad)">✕ {% if task.kind == "agent_proposal" %}No, not needed{% else %}Reject{% endif %}</button>
+  </form>
+  {% endif %}
+</article>
+{% endwith %}

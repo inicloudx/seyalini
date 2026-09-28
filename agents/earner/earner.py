@@ -10,6 +10,9 @@ in ANY field outside what the company already does.
 4. Review (daily, acts when a test ends): scale what pays, stop what doesn't, and remember why, so the
    next hunt is smarter.
 
+5. Team: when an experiment needs repeated work, or a winner should grow, the Earner proposes new
+   worker agents (see team.py). You approve each one; it then works on its own schedule.
+
 The Earner proposes and drafts. It never spends, signs up, posts or sends anything by itself.
 """
 import json
@@ -77,7 +80,12 @@ Reply with ONLY a JSON object:
   "goal_inr": 3000, "budget_inr": 1000,
   "steps": [{{"day": 1, "who": "you" or "earner", "action": "exactly what to do"}}],
   "drafts": [{{"title": "what it is", "text": "the ready-to-use text"}}],
-  "stop_if": "the signal to stop early", "scale_if": "the signal to put more in"}}"""
+  "stop_if": "the signal to stop early", "scale_if": "the signal to put more in",
+  "team": [{{"name": "short agent name", "role": "one line", "every": "day" or "week",
+             "instructions": "exactly what this agent produces on each run, for the owner to check",
+             "monthly_budget_usd": 1}}]}}
+"team" = new AI agents this experiment needs for REPEATED work (daily posts, new listings, replies to
+buyers, weekly outreach lists). At most {max_team}; use [] when one-off drafts are enough."""
 
 REVIEW_SYSTEM = """You are the Earner of {tenant}, a world-class business builder. A money experiment has
 ended. Decide like an investor: scale it (it pays or clearly will), stop it (it does not), or extend it
@@ -85,7 +93,9 @@ once (only if the signal is promising but too early). Be honest; sunk cost does 
 Reply with ONLY a JSON object:
 {{"verdict": "scale" or "stop" or "extend", "why": "one or two plain sentences",
   "lesson": "what this teaches the next hunt, one sentence",
-  "next_steps": ["if scaling or extending: the next concrete actions"]}}"""
+  "next_steps": ["if scaling or extending: the next concrete actions"],
+  "team": [{{"name": str, "role": str, "every": "day" or "week", "instructions": str, "monthly_budget_usd": 1}}]}}
+"team": only when scaling, the NEW agents that would grow it (it already has: {current_team}). Else []."""
 
 
 # --- helpers -------------------------------------------------------------------------------------
@@ -194,7 +204,10 @@ def _sample_plan(idea: dict, days: int, budget: int) -> dict:
                       {"day": 3, "who": "earner", "action": "Draft messages for 20 likely buyers"},
                       {"day": days, "who": "earner", "action": "Count money in and out, then decide scale or stop"}],
             "drafts": [{"title": "Listing", "text": f"{idea.get('name', 'Offer')}: fast, friendly, done for you."}],
-            "stop_if": "No paying customer by day 10", "scale_if": "Two paying customers in the first week"}
+            "stop_if": "No paying customer by day 10", "scale_if": "Two paying customers in the first week",
+            "team": [{"name": f"{idea.get('name', 'Offer')[:30]} poster", "role": "Writes the daily posts that bring buyers",
+                      "every": "day", "instructions": "Write 3 short posts for today that bring buyers to the offer.",
+                      "monthly_budget_usd": 1}]}
 
 
 # --- 1. hunt -------------------------------------------------------------------------------------
@@ -255,7 +268,8 @@ def plan(idea_task: Task) -> Task:
     try:
         raw = agent.think([
             {"role": "system", "content": PLAN_SYSTEM.format(tenant=idea_task.tenant.name, days=days, budget=cap,
-                                                             about=cfg.get("about_owner", ""), rules=HOUSE_RULES)},
+                                                             about=cfg.get("about_owner", ""), rules=HOUSE_RULES,
+                                                             max_team=int(cfg.get("max_agents_per_plan", 2)))},
             {"role": "user", "content": "# The idea\n" + json.dumps(idea, ensure_ascii=False)
                                         + ("\n# The owner learned before\n" + "\n".join(agent.rules()) if agent.rules() else "")},
         ], task=task, json_mode=True, mock=json.dumps(_sample_plan(idea, days, cap)))
@@ -273,6 +287,11 @@ def plan(idea_task: Task) -> Task:
         task.status, task.result = "failed", {"error": str(exc)[:300]}
         agent.log("task_failed", f"Earner could not plan “{task.title[:60]}”: {str(exc)[:150]}", task=task)
     task.save()
+    if task.status == "done":
+        from . import team
+
+        team.propose(task, (task.result.get("team") or [])[:int(cfg.get("max_agents_per_plan", 2))],
+                     why="The plan needs this work again and again")
     return task
 
 
@@ -315,11 +334,17 @@ def review(plan_task: Task, force: bool = False) -> dict | None:
              "goal_inr": result.get("goal_inr"), "budget_inr": result.get("budget_inr"), **totals,
              "ledger": result.get("ledger"), "stop_if": result.get("stop_if"), "scale_if": result.get("scale_if"),
              "already_extended": bool(result.get("extended"))}
+    from . import team
+
     verdict_mock = {"verdict": "scale" if totals["profit"] > 0 else "stop",
                     "why": "It earned more than it cost." if totals["profit"] > 0 else "No paying customers yet.",
-                    "lesson": "Ideas with a clear buyer and a small first price win faster.", "next_steps": []}
+                    "lesson": "Ideas with a clear buyer and a small first price win faster.", "next_steps": [],
+                    "team": [{"name": "Buyer replies", "role": "Answers buyer questions", "every": "day",
+                              "instructions": "Draft replies to today's buyer questions.", "monthly_budget_usd": 1}]
+                    if totals["profit"] > 0 else []}
+    current = ", ".join(c.name for c in team.workers(plan_task.tenant, plan_task)) or "no agents"
     raw = agent.think([
-        {"role": "system", "content": REVIEW_SYSTEM.format(tenant=plan_task.tenant.name)},
+        {"role": "system", "content": REVIEW_SYSTEM.format(tenant=plan_task.tenant.name, current_team=current)},
         {"role": "user", "content": json.dumps(facts, ensure_ascii=False)},
     ], task=plan_task, json_mode=True, mock=json.dumps(verdict_mock))
     r = parse_json(raw)
@@ -340,6 +365,11 @@ def review(plan_task: Task, force: bool = False) -> dict | None:
     plan_task.save(update_fields=["result", "updated"])
     agent.log("earner_review", f"{plan_task.title}: {verdict} (earned Rs {totals['earned']:,}, spent Rs {totals['spent']:,}). "
                                f"{r.get('why', '')}"[:300], task=plan_task)
+    if verdict == "scale":
+        team.propose(plan_task, (r.get("team") or [])[:int(_cfg(agent).get("max_agents_per_plan", 2))],
+                     why="It earns: this agent helps it grow")
+    elif verdict == "stop":
+        team.pause_for_plan(plan_task, "Its experiment stopped")
     return r
 
 
@@ -352,6 +382,9 @@ def stop(plan_task: Task, reason: str = "") -> None:
     plan_task.result = result
     plan_task.save(update_fields=["result", "updated"])
     AgentRuntime(plan_task.tenant, "earner").log("earner_review", f"{plan_task.title}: stopped by you. {reason}"[:300], task=plan_task)
+    from . import team
+
+    team.pause_for_plan(plan_task, "Its experiment stopped")
 
 
 def run_reviews(tenant) -> int:

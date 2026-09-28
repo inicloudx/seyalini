@@ -20,6 +20,15 @@
   <p class="muted small" style="margin:0">{{ summary.running }} experiment{{ summary.running|pluralize }} running. Each test runs up to {{ cfg.experiment_days|default:14 }} days and may spend at most ₹{{ cfg.experiment_budget_inr|default:2000 }}.</p>
 </section>
 
+{% if team_items %}
+<section class="stack" aria-label="From your AI team">
+  <h2>From your AI team <span class="badge">{{ team_items|length }}</span></h2>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));align-items:start">
+  {% for task in team_items %}{% include "dashboard/partials/team_item.html" %}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));align-items:start">
 <section class="stack" aria-label="New ideas">
   <div class="row" style="justify-content:space-between"><h2>New ideas {% if ideas %}<span class="badge">{{ ideas|length }}</span>{% endif %}</h2></div>
@@ -83,6 +92,21 @@
   {% empty %}<div class="card"><p class="muted small" style="margin:0">Say “Try it” on an idea and its 14-day plan appears here.</p></div>{% endfor %}
 </section>
 </div>
+
+<section class="card stack" aria-label="Your AI team">
+  <h2>Your AI team</h2>
+  <p class="muted small" style="margin:0">Agents the Earner created for your experiments. Each drafts its work on a schedule for your check. At most {{ cfg.max_agents|default:5 }} at once, ${{ cfg.max_team_budget_usd|default:10 }} a month together.</p>
+  {% for c in crew %}
+  <div class="stack" style="gap:6px;border-top:1px solid var(--line2);padding-top:10px">
+    <div class="row" style="justify-content:space-between"><b>{{ c.name }}</b><span class="pill {% if c.status == 'active' %}ok{% endif %}"><span class="dot"></span>{% if c.status == "active" %}Working{% else %}Paused{% endif %}</span></div>
+    <span class="muted small">{{ c.role }} · every {{ c.config.every }} · ${{ c.spent|floatformat:2 }} of ${{ c.monthly_budget_usd }} this month{% if c.last %} · last: {{ c.last.created|timesince }} ago{% endif %}</span>
+    {% if can_review %}<div class="row">
+      {% if c.status == "active" %}<form method="post" action="{% url 'dashboard:agent_run' c.key %}">{% csrf_token %}<button class="btn small">Work now</button></form>{% endif %}
+      {% if is_owner %}<form method="post" action="{% url 'dashboard:agent_toggle' c.key %}">{% csrf_token %}<button class="btn small">{% if c.status == "active" %}Pause{% else %}Restart{% endif %}</button></form>{% endif %}
+    </div>{% endif %}
+  </div>
+  {% empty %}<p class="muted small" style="margin:0">No agents yet. When an experiment needs daily work, the Earner asks you before adding one.</p>{% endfor %}
+</section>
 
 <section class="card stack">
   <h2>What the Earner did</h2>

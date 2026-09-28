@@ -987,3 +987,92 @@ class EarnerTests(TestCase):
         self.assertIn(idea.title, today)  # also in "Needs you"
         self.client.post("/money/hunt/", {"note": "earn in dollars"})
         self.assertEqual(Task.objects.filter(kind="money_idea").count(), 6)
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class EarnerTeamTests(TestCase):
+    """The Earner creates worker agents when an experiment needs them, always with your yes and within limits."""
+
+    def setUp(self):
+        from agents.earner import earner
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.client.force_login(self.user)
+        self.plan = earner.plan(earner.hunt(self.tenant, n=1)[0])
+        self.proposal = Task.objects.get(kind="agent_proposal", parent=self.plan)
+
+    def _decide(self, task, decision, chip=""):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{task.id}/decide/", {"decision": decision, "chip": chip})
+
+    def _worker(self):
+        from agents.earner import team
+
+        return team.workers(self.tenant, self.plan)[0]
+
+    def test_plan_proposes_an_agent_and_yes_creates_it(self):
+        self.assertEqual(self.proposal.status, "awaiting_approval")
+        self.assertIn("New agent", self.client.get("/money/").content.decode())
+        self._decide(self.proposal, "approved")
+        card = self._worker()
+        self.assertEqual((card.status, card.autonomy, card.config["made_by"]), ("active", 1, "earner"))
+        self.assertTrue(card.key.startswith("w-"))
+        self.assertLessEqual(card.monthly_budget_usd, 2)
+        first = Task.objects.get(kind="work_output", agent_key=card.key)  # it starts working straight away
+        self.assertEqual(first.status, "awaiting_approval")
+        self.assertTrue(first.result["items"])
+        page = self.client.get("/money/").content.decode()
+        self.assertIn("Your AI team", page)
+        self.assertIn(card.name, page)
+
+    def test_no_means_no_agent(self):
+        from agents.earner import team
+
+        self._decide(self.proposal, "discarded", "Not needed yet")
+        self.assertEqual(team.workers(self.tenant), [])
+        self.assertTrue(Rule.objects.filter(agent_key="earner", text="Avoid: Not needed yet").exists())
+
+    def test_worker_learns_from_redo_and_keeps_its_schedule(self):
+        from agents.worker import worker
+
+        self._decide(self.proposal, "approved")
+        card = self._worker()
+        self.assertFalse(worker.is_due(card))  # already worked today
+        self.assertEqual(worker.run_due(self.tenant), 0)
+        first = Task.objects.get(kind="work_output", agent_key=card.key)
+        self._decide(first, "redo", "Too salesy")
+        self.assertTrue(Rule.objects.filter(agent_key=card.key, text="Too salesy").exists())
+        self.assertEqual(Task.objects.filter(kind="work_output", agent_key=card.key, status="awaiting_approval").count(), 1)
+
+    def test_stopping_the_experiment_pauses_its_agents(self):
+        from agents.earner import earner
+
+        self._decide(self.proposal, "approved")
+        earner.stop(self.plan, "No buyers")
+        card = self._worker()
+        self.assertEqual((card.status, card.version), ("paused", 2))  # a new version; the old one is kept
+        self.assertEqual(AgentCard.objects.filter(key=card.key).count(), 2)
+
+    def test_team_limits(self):
+        from agents.earner import team
+
+        cfg = dict(AgentCard.objects.get(tenant=self.tenant, key="earner", is_current=True).config)
+        cfg["max_agents"] = 0
+        sync_agent(self.tenant, {"key": "earner", "name": "Earner", "status": "active", "autonomy": 1,
+                                 "model": "gemini/gemini-3.5-flash-lite", "monthly_budget_usd": 3, "config": cfg})
+        self._decide(self.proposal, "approved")
+        self.proposal.refresh_from_db()
+        self.assertEqual(self.proposal.status, "failed")
+        self.assertIn("team is full", self.proposal.result["error"])
+        self.assertEqual(team.workers(self.tenant), [])
+        self.assertEqual(team.propose(self.plan, [{"name": "Another", "instructions": "x"}]), [])
+
+    def test_owner_can_pause_and_restart(self):
+        self._decide(self.proposal, "approved")
+        key = self._worker().key
+        self.client.post(f"/money/team/{key}/toggle/")
+        self.assertEqual(self._worker().status, "paused")
+        self.client.post(f"/money/team/{key}/toggle/")
+        self.assertEqual(self._worker().status, "active")

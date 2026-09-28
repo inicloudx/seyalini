@@ -40,3 +40,15 @@ def rehunt(idea_task_id: int):
 def run_reviews(tenant_id: int | None = None):
     tenants = Tenant.objects.filter(id=tenant_id) if tenant_id else Tenant.objects.all()
     return {t.slug: earner.run_reviews(t) for t in tenants if _active(t)}
+
+
+@shared_task
+def spawn_agent(proposal_task_id: int):
+    from . import team
+
+    card = team.spawn(Task.objects.get(id=proposal_task_id))
+    if card is not None:  # first work straight away, so you see what the new agent does
+        from agents.worker import worker
+
+        worker.run(card.tenant, card.key)
+    return card.key if card else None

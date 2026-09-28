@@ -23,6 +23,8 @@ REASON_CHIPS = {
     "short_script": ["Weak hook", "Too long", "Off-brand", "Too similar to a recent one", "Not kid-friendly", "Wrong facts"],
     "short_video": ["Too dark", "Text hard to read", "Visuals off-brand", "Boring, needs more motion", "Character looks wrong", "Not kid-friendly"],
     "money_idea": ["Too much of my time", "Costs too much to start", "Not my kind of work", "Too slow to earn", "Too risky"],
+    "agent_proposal": ["Not needed yet", "Costs too much", "I'll do this myself"],
+    "work_output": ["Too long", "Too salesy", "Wrong audience", "Not accurate", "Sounds like AI"],
 }
 
 

@@ -6,6 +6,15 @@
     <p style="margin:0">Dropped{% if task.approval.reason %}. The Earner will avoid: “{{ task.approval.reason }}”{% endif %}.</p>
     {% else %}<span class="pill warn" style="align-self:flex-start">↻ New idea coming</span>
     <p style="margin:0">The Earner is thinking of a better one{% if task.approval.reason %} and will remember: “{{ task.approval.reason }}”{% endif %}.</p>{% endif %}
+  {% elif task.kind == "agent_proposal" %}
+    {% if task.approval.decision == "approved" %}<span class="pill ok" style="align-self:flex-start">✓ Agent added</span>
+    <p style="margin:0"><b>{{ task.result.name }}</b> {% if task.result.error %}was not added: {{ task.result.error }}{% else %}joined your team and is making its first work. See it in <a href="{% url 'dashboard:money' %}">Money</a>.{% endif %}</p>
+    {% else %}<span class="pill bad" style="align-self:flex-start">✕ Not added</span>
+    <p style="margin:0">The Earner won't add {{ task.result.name }}{% if task.approval.reason %} and will remember: “{{ task.approval.reason }}”{% endif %}.</p>{% endif %}
+  {% elif task.kind == "work_output" %}
+    {% if task.status == "approved" %}<span class="pill ok" style="align-self:flex-start">✓ Good</span><p style="margin:0">Noted. {{ task.result.agent_name }} will keep this style.</p>
+    {% elif task.approval.decision == "discarded" %}<span class="pill bad" style="align-self:flex-start">✕ Rejected</span><p style="margin:0">Thrown away{% if task.approval.reason %}; it will avoid: “{{ task.approval.reason }}”{% endif %}.</p>
+    {% else %}<span class="pill warn" style="align-self:flex-start">↻ Redoing</span><p style="margin:0">{{ task.result.agent_name }} is making a new version{% if task.approval.reason %} and will remember: “{{ task.approval.reason }}”{% endif %}.</p>{% endif %}
   {% elif task.status == "approved" %}
     <span class="pill ok" style="align-self:flex-start">✓ Approved</span>
     <p style="margin:0">{% if task.kind == "short_video" %}<b>{{ task.result.title|cut:"[Sample] " }}</b> is ready. Find it in <a href="{% url 'dashboard:videos' %}">Videos</a>.{% else %}Great, the AI is now making the video. It appears here in 1–2 minutes.{% endif %}</p>

@@ -29,6 +29,7 @@ Plan idea -> Script -> Video (Veo clip + images + voice-over) -> Your check -> P
 | Multi-organisation: own logins, roles (owner/reviewer/viewer), encrypted keys, budgets | `core/` | done |
 | Installable on phone (PWA) | `dashboard/pwa.py` | done |
 | Earner agent: money ideas in ANY field outside ours (web research), "Try it" -> 14-day plan + drafts, ₹ ledger, scale/stop verdicts; Money page `/money/` + Today card | `agents/earner/`, `dashboard/money_views.py`, 08:00 weekly hunt + 21:30 reviews | done (proposes only, never spends) |
+| Earner builds its own team: proposes worker agents per experiment (you approve), each a real card (`w-*`, `config.kind: worker`) drafting on a schedule for your check; paused when the experiment stops | `agents/earner/team.py`, `agents/worker/`, 09:00 in `config/celery.py` | done (limits in `earner.yaml`) |
 | **Runs by itself 24/7** | Celery beat on a server | **NOT YET: next task below** |
 | Instagram / Facebook, installs per video, YouTube audit | - | planned |
 
@@ -36,6 +37,8 @@ Agents (cards in `tenants/<org>/agents/*.yaml`, versioned in DB by `load_tenants
 marketing, publisher, analyst, scout, earner (active), manager / catalyst / developer (planned).
 Earner house rules (legal in India, no gambling/trading/MLM/spam...) are in the prompt AND a keyword net
 `agents/earner/earner.py BLOCKED`; fields to stay out of and the ₹ cap per experiment are in `earner.yaml`.
+Worker agents live only in the DB (not YAML), one level deep (workers cannot create agents), autonomy 1,
+capped by `max_agents`, `max_agent_budget_usd`, `max_team_budget_usd`. Pause/restart = new card version.
 
 ## 2. Tech
 
@@ -46,7 +49,7 @@ Earner house rules (legal in India, no gambling/trading/MLM/spam...) are in the 
 - AI: LiteLLM for text; `google-genai` for images, Veo, TTS. Prices newer than LiteLLM's table are in `agents/llm.py FALLBACK_PRICES`.
 - Video: ffmpeg from `imageio-ffmpeg` (see ARM note in section 5), Pillow overlays.
 - Settings load `.env` themselves (`config/settings.py _load_dotenv`).
-- Tests: `python manage.py test core` (59 tests, dry-run AI, fake YouTube). Keep them green.
+- Tests: `python manage.py test core` (65 tests, dry-run AI, fake YouTube). Keep them green.
 
 Money rules: every agent has `monthly_budget_usd`; `AgentRuntime.ensure_budget()` stops jobs at the cap.
 Marketing = $15/month (1 hybrid Short/day ≈ ₹40). Google Cloud budget alert ₹1,000 (raise to ~₹1,500).
