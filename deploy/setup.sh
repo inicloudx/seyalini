@@ -96,11 +96,11 @@ as_app bash -c "cd $APP && set -a && source .env && set +a && \
     $VENV/bin/python manage.py collectstatic --noinput -v0"
 
 say "8/9 Services, restart rights, daily backup"
-cp $APP/deploy/seyalini-{web,worker,beat}.service /etc/systemd/system/
+cp $APP/deploy/seyalini-{web,worker,chat,beat}.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable -q seyalini-web seyalini-worker seyalini-beat
-systemctl restart seyalini-web seyalini-worker seyalini-beat
-echo "seyalini ALL=(root) NOPASSWD: /usr/bin/systemctl restart seyalini-web seyalini-worker seyalini-beat" > /tmp/seyalini.sudo
+systemctl enable -q seyalini-web seyalini-worker seyalini-chat seyalini-beat
+systemctl restart seyalini-web seyalini-worker seyalini-chat seyalini-beat
+echo "seyalini ALL=(root) NOPASSWD: /usr/bin/systemctl restart seyalini-web seyalini-worker seyalini-chat seyalini-beat" > /tmp/seyalini.sudo
 visudo -cqf /tmp/seyalini.sudo && install -m 440 /tmp/seyalini.sudo /etc/sudoers.d/seyalini
 rm -f /tmp/seyalini.sudo
 ( crontab -u seyalini -l 2>/dev/null | grep -v deploy/backup.sh; echo "30 2 * * * $APP/deploy/backup.sh" ) | crontab -u seyalini -

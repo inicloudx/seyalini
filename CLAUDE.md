@@ -110,6 +110,7 @@ Docker), so Seyalini gets its **own free Oracle server** and subdomain. The webs
 - `tenants/inixr/products/` also has two leftover AlphaMagic copies (`alpha-magic`, `alpha-magic-2`); the
   dashboard offers to archive them. Tests use a clean copy with only `alphamagic`.
 - Video rendering is CPU-heavy: worker concurrency is 1 on purpose.
+- Chat replies and Telegram taps run on their own worker (`seyalini-chat`, queue `chat`), so they never wait behind a video.
 - Media files are served by nginx without login (URLs are hard to guess). Fine for marketing videos.
 - `DJANGO_DEBUG=0` on the server, otherwise secure cookies and proxy https are off.
 - YouTube uploads stay **private** until Google's API audit; publisher setting `youtube_privacy` in

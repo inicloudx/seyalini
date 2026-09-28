@@ -120,6 +120,11 @@ CELERY_BROKER_URL = env("REDIS_URL", "redis://localhost:6379/0")
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_EAGER", False)
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_SERIALIZER = "json"
+# Chat replies and Yes/No taps get their own worker (seyalini-chat), so they never wait behind a
+# video render. Everything else stays on the default queue.
+CELERY_TASK_ROUTES = {
+    "agents.earner.tasks.telegram_update": {"queue": "chat"},
+}
 # celery = Docker/server with Redis; thread = laptop without Redis (CELERY_EAGER=1)
 JOBS_MODE = env("JOBS_MODE", "thread" if CELERY_TASK_ALWAYS_EAGER else "celery")
 

@@ -1,0 +1,16 @@
+# /etc/systemd/system/seyalini-chat.service  - quick jobs: chat replies and Yes/No taps from Telegram
+[Unit]
+Description=Seyalini chat and actions (celery worker, chat queue)
+After=network.target redis-server.service redis.service
+
+[Service]
+User=seyalini
+Group=seyalini
+WorkingDirectory=/opt/seyalini/app
+EnvironmentFile=/opt/seyalini/app/.env
+# its own queue so a reply never waits behind a video render; small jobs, so two at a time
+ExecStart=/opt/seyalini/venv/bin/celery -A config worker -Q chat -n chat@%%h --loglevel=info --concurrency=2
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

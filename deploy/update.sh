@@ -8,5 +8,5 @@ set -a; source .env; set +a
 /opt/seyalini/venv/bin/python manage.py migrate --noinput
 /opt/seyalini/venv/bin/python manage.py load_tenants
 /opt/seyalini/venv/bin/python manage.py collectstatic --noinput -v0
-sudo systemctl restart seyalini-web seyalini-worker seyalini-beat
+sudo systemctl restart seyalini-web seyalini-worker seyalini-chat seyalini-beat
 echo "Seyalini updated."
