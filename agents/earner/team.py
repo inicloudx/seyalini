@@ -75,6 +75,12 @@ def propose(plan_task: Task, specs: list[dict], why: str = "") -> list[Task]:
         taken.add(s["name"].lower())
         open_n += 1
         out.append(task)
+        from . import chat
+
+        chat.notify(plan_task.tenant, f"🤖 Can I create a new agent?\n\n{s['name']}: {s['role']}\nWhy: {why}\n"
+                                      f"For: {plan_task.title}\nIt works every {s['every']}, costs up to ${s['monthly_budget_usd']}/month, "
+                                      f"and only drafts for your check.",
+                    chat.yes_no(task, "✓ Yes, create it", "✕ No"))
     if out:
         earner.log("earner_team", f"{plan_task.title}: proposed {len(out)} new agent{'s' if len(out) != 1 else ''} "
                                   f"({', '.join(t.result['name'] for t in out)})", task=plan_task)

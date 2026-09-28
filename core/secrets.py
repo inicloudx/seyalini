@@ -19,8 +19,8 @@ KNOWN = {
     "ANTHROPIC_API_KEY": "Anthropic API key (optional)",
     "YOUTUBE_CLIENT_ID": "YouTube OAuth client ID (Google Cloud → Clients)",
     "YOUTUBE_CLIENT_SECRET": "YouTube OAuth client secret",
-    "TELEGRAM_BOT_TOKEN": "Telegram bot token (optional, notifications)",
-    "TELEGRAM_CHAT_ID": "Telegram chat id (optional)",
+    "TELEGRAM_BOT_TOKEN": "Telegram bot token (chat with the Earner on your phone)",
+    "TELEGRAM_CHAT_ID": "Telegram chat id (set by Connect my phone)",
 }
 
 

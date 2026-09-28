@@ -117,6 +117,8 @@ def settings_home(request):
                 messages.success(request, msg)
             if any("YOUTUBE_" in c for c in changed):
                 return redirect(reverse("dashboard:settings") + "#youtube")
+            if any("TELEGRAM_" in c for c in changed):
+                return redirect(reverse("dashboard:settings") + "#chat")
             return redirect("dashboard:settings")
         elif section == "test":
             key = get_secret(t, "GEMINI_API_KEY")
@@ -164,7 +166,7 @@ def settings_home(request):
 
     saved = {s.name: s for s in TenantSecret.objects.filter(tenant=t)}
     keys = [{"name": n, "label": label, "saved": saved.get(n), "platform": uses_platform_keys(t) and not saved.get(n) and bool(get_secret(t, n))}
-            for n, label in KNOWN.items() if not n.startswith("YOUTUBE_")]
+            for n, label in KNOWN.items() if not n.startswith(("YOUTUBE_", "TELEGRAM_"))]
     yt_keys = [{"name": n, "label": label, "saved": saved.get(n)} for n, label in KNOWN.items() if n.startswith("YOUTUBE_")]
     return render(request, "dashboard/settings.html", {
         "org_form": org_form, "member_form": member_form, "keys": keys,
@@ -175,6 +177,8 @@ def settings_home(request):
         "yt_keys": yt_keys,
         "youtube_ready": bool(get_secret(t, "YOUTUBE_CLIENT_ID") and get_secret(t, "YOUTUBE_CLIENT_SECRET")),
         "youtube_redirect": _yt_redirect(request),
+        "tg": {"token": saved.get("TELEGRAM_BOT_TOKEN"), "connected": bool(get_secret(t, "TELEGRAM_CHAT_ID")),
+               "bot": (t.settings or {}).get("telegram_bot", ""), "code": ((t.settings or {}).get("telegram_link") or {}).get("code")},
     })
 
 

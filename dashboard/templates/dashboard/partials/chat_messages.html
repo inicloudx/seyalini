@@ -1,0 +1,15 @@
+<div id="chat-log" class="stack" style="gap:10px">
+  {% for m in chat %}
+  <div style="display:flex;{% if m.role == 'owner' %}justify-content:flex-end{% endif %}">
+    <div style="max-width:85%;padding:10px 14px;border-radius:16px;word-wrap:break-word;{% if m.role == 'owner' %}background:var(--ink);color:var(--bg);border-bottom-right-radius:4px{% else %}background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px{% endif %}"><div style="white-space:pre-wrap">{{ m.text }}</div>{% if m.buttons and can_review %}
+      <div class="row" style="gap:6px;margin-top:8px">{% for b in m.buttons %}
+        <form hx-post="{% url 'dashboard:chat_send' %}" hx-target="#chat-log" hx-swap="outerHTML" method="post" action="{% url 'dashboard:chat_send' %}">{% csrf_token %}<button class="btn small" name="action" value="{{ b.1 }}">{{ b.0 }}</button></form>{% endfor %}
+      </div>{% endif %}
+      <div class="small" style="opacity:.6;margin-top:4px">{{ m.created|date:"j M H:i" }}{% if m.channel == "telegram" %} · Telegram{% endif %}</div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="card"><p class="muted" style="margin:0">Say hello. Ask things like “How much did we make this week?”, “Find ideas I can sell in dollars”, or “We earned ₹800 from the resume idea”.</p></div>
+  {% endfor %}
+</div>
+<script>window.scrollTo(0, document.body.scrollHeight);</script>

@@ -52,3 +52,10 @@ def spawn_agent(proposal_task_id: int):
 
         worker.run(card.tenant, card.key)
     return card.key if card else None
+
+
+@shared_task
+def telegram_update(tenant_id: int, update: dict):
+    from dashboard.chat_views import process_update
+
+    process_update(Tenant.objects.get(id=tenant_id), update)

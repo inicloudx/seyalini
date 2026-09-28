@@ -2,7 +2,7 @@
 {% block title %}Money · Seyalini{% endblock %}
 {% block content %}
 <section class="stack" style="gap:6px">
-  <div class="row"><a class="btn small" href="{% url 'dashboard:home' %}">← Today</a></div>
+  <div class="row"><a class="btn small" href="{% url 'dashboard:home' %}">← Today</a>{% if can_review %}<a class="btn small" href="{% url 'dashboard:chat' %}">💬 Chat with the Earner</a>{% endif %}</div>
   <h1>Money</h1>
   <p class="muted" style="margin:0">The Earner looks for new ways to earn in any field, outside what you already do. It suggests ideas and writes the plans and drafts. It never spends money or signs up for anything without you.</p>
 </section>

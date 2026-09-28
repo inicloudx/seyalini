@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import money_views, product_views, settings_views, views
+from . import chat_views, money_views, product_views, settings_views, views
 
 app_name = "dashboard"
 urlpatterns = [
@@ -18,6 +18,9 @@ urlpatterns = [
     path("videos/<int:task_id>/publish/", views.video_publish, name="video_publish"),
     path("advanced/", views.advanced, name="advanced"),
     path("money/", money_views.money, name="money"),
+    path("chat/", chat_views.chat_page, name="chat"),
+    path("chat/send/", chat_views.chat_send, name="chat_send"),
+    path("settings/telegram/connect/", chat_views.telegram_connect, name="telegram_connect"),
     path("money/hunt/", money_views.money_hunt, name="money_hunt"),
     path("money/<int:task_id>/record/", money_views.money_record, name="money_record"),
     path("money/<int:task_id>/stop/", money_views.money_stop, name="money_stop"),

@@ -252,6 +252,14 @@ def hunt(tenant, n: int | None = None, note: str = "") -> list[Task]:
         created.append(task)
     agent.log("earner_hunt", f"Earner found {len(created)} new money idea{'s' if len(created) != 1 else ''}"
                              + (" (with web research)" if grounded else ""))
+    from . import chat
+
+    for t in created:
+        i = t.result
+        chat.notify(tenant, f"💡 New money idea: {i['name']} ({i.get('field', '')})\n{i['how_it_makes_money']}\n"
+                            f"Rs {i['monthly_low_inr']:,}–{i['monthly_high_inr']:,}/month · first Rs in ~{i['first_rupee_days']} days · "
+                            f"start cost Rs {i['startup_cost_inr']:,} · your time {i['owner_hours_per_week']} h/week",
+                    chat.yes_no(t, "✓ Try it", "✕ Not for me"))
     return created
 
 
@@ -288,8 +296,12 @@ def plan(idea_task: Task) -> Task:
         agent.log("task_failed", f"Earner could not plan “{task.title[:60]}”: {str(exc)[:150]}", task=task)
     task.save()
     if task.status == "done":
-        from . import team
+        from . import chat, team
 
+        first = next((s["action"] for s in task.result["steps"] if s.get("who") == "you"), "")
+        chat.notify(task.tenant, f"🚀 Experiment started: {task.title}\nGoal: {task.result.get('goal', '')}\n"
+                                 + (f"Your first step: {first}\n" if first else "")
+                                 + f"{len(task.result['drafts'])} ready-to-use drafts are in Seyalini → Money.")
         team.propose(task, (task.result.get("team") or [])[:int(cfg.get("max_agents_per_plan", 2))],
                      why="The plan needs this work again and again")
     return task
@@ -365,6 +377,10 @@ def review(plan_task: Task, force: bool = False) -> dict | None:
     plan_task.save(update_fields=["result", "updated"])
     agent.log("earner_review", f"{plan_task.title}: {verdict} (earned Rs {totals['earned']:,}, spent Rs {totals['spent']:,}). "
                                f"{r.get('why', '')}"[:300], task=plan_task)
+    from . import chat
+
+    chat.notify(plan_task.tenant, f"📊 {plan_task.title}: {'grow it' if verdict == 'scale' else verdict}. "
+                                  f"Earned Rs {totals['earned']:,}, spent Rs {totals['spent']:,}.\n{r.get('why', '')}")
     if verdict == "scale":
         team.propose(plan_task, (r.get("team") or [])[:int(_cfg(agent).get("max_agents_per_plan", 2))],
                      why="It earns: this agent helps it grow")

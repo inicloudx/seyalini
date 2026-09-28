@@ -52,3 +52,48 @@ def notify_script(task) -> bool:
             f"{s.get('title')}\nHook: {s.get('hook')}\n{scenes}\n\n"
             f"Approve or redo: {settings.DASHBOARD_URL}/#task-{task.id}")
     return send(text, task.tenant)
+
+
+# --- two-way chat with the Earner -------------------------------------------------------------------
+
+API = "https://api.telegram.org/bot{token}/{method}"
+
+
+def call(token: str, method: str, payload: dict | None = None, timeout=15) -> dict:
+    r = httpx.post(API.format(token=token, method=method), json=payload or {}, timeout=timeout)
+    data = r.json()
+    if not data.get("ok"):
+        raise RuntimeError(data.get("description") or f"Telegram {method} failed")
+    return data.get("result")
+
+
+def keyboard(buttons: list) -> dict | None:
+    """[[label, action], ...] -> Telegram inline buttons, two per row."""
+    if not buttons:
+        return None
+    keys = [{"text": label[:40], "callback_data": action[:64]} for label, action in buttons]
+    return {"inline_keyboard": [keys[i:i + 2] for i in range(0, len(keys), 2)]}
+
+
+def send_chat(tenant, text: str, buttons: list | None = None, chat_id: str | None = None) -> bool:
+    """A chat message with optional Yes / No buttons. Silent if Telegram is not connected."""
+    token, chat = _creds(tenant)
+    chat = chat_id or chat
+    if not (token and chat):
+        return False
+    payload = {"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}
+    if kb := keyboard(buttons or []):
+        payload["reply_markup"] = kb
+    try:
+        call(token, "sendMessage", payload)
+        return True
+    except Exception as exc:  # a chat message must never break the agent
+        log.warning("Telegram chat send failed: %s", exc)
+        return False
+
+
+def webhook_secret(tenant) -> str:
+    import hashlib
+    import hmac
+
+    return hmac.new(settings.SECRET_KEY.encode(), f"telegram:{tenant.slug}".encode(), hashlib.sha256).hexdigest()[:48]

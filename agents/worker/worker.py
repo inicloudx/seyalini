@@ -81,6 +81,11 @@ def run(tenant, key: str, redo_of: Task | None = None) -> Task | None:
         task.save()
         Approval.objects.create(tenant=tenant, task=task)
         agent.log("worker_output", f"{card.name} made: {task.title}", task=task)
+        from agents.earner import chat
+
+        body = "\n\n".join(f"{i.get('title', '')}:\n{i['text']}" for i in out["items"][:3])
+        chat.notify(tenant, f"📝 {card.name} made: {task.title}\n{out.get('note_for_owner', '')}\n\n{body}\n\n"
+                            f"Reply with what to change, or:", chat.yes_no(task, "✓ Good, I'll use it", "✕ Reject"))
     except BudgetExceeded:
         task.status, task.result = "failed", {"error": "Monthly budget used up."}
         task.save()

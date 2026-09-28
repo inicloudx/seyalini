@@ -1076,3 +1076,101 @@ class EarnerTeamTests(TestCase):
         self.assertEqual(self._worker().status, "paused")
         self.client.post(f"/money/team/{key}/toggle/")
         self.assertEqual(self._worker().status, "active")
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class EarnerChatTests(TestCase):
+    """Chat with the Earner in Seyalini or Telegram: it asks with Yes / No buttons and acts on plain words."""
+
+    def setUp(self):
+        from agents.earner import earner
+
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.client.force_login(self.user)
+        self.idea = earner.hunt(self.tenant, n=1)[0]
+
+    def _reply(self, payload):
+        import json
+        from unittest import mock
+
+        from agents.runtime import AgentRuntime
+
+        return mock.patch.object(AgentRuntime, "think", return_value=json.dumps(payload))
+
+    def test_agent_messages_first_with_buttons(self):
+        from core.models import ChatMessage
+
+        m = ChatMessage.objects.filter(role="agent").last()
+        self.assertIn("New money idea", m.text)
+        self.assertEqual(m.buttons[0][1], f"d:{self.idea.id}:approved")
+
+    def test_can_i_create_an_agent_yes_in_chat(self):
+        from core.models import ChatMessage
+
+        with self.captureOnCommitCallbacks(execute=True):  # "Try it" -> plan -> it asks about an agent
+            self.client.post("/chat/send/", {"action": f"d:{self.idea.id}:approved"})
+        ask = ChatMessage.objects.filter(text__startswith="🤖 Can I create a new agent?").last()
+        self.assertIsNotNone(ask)
+        self.assertIn("Why:", ask.text)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post("/chat/send/", {"action": ask.buttons[0][1]})
+        self.assertTrue(AgentCard.objects.filter(tenant=self.tenant, config__kind="worker", status="active").exists())
+        page = self.client.get("/chat/").content.decode()
+        self.assertIn("Can I create a new agent?", page)
+
+    def test_plain_words_become_actions(self):
+        from agents.earner import earner
+        from core.models import ChatMessage
+
+        plan = earner.plan(self.idea)
+        with self._reply({"reply": "Great news!", "actions": [
+                {"do": "record_money", "plan_id": plan.id, "kind": "earned", "amount_inr": 800, "note": "first buyer"}]}):
+            self.client.post("/chat/send/", {"text": "we earned 800 from it"})
+        plan.refresh_from_db()
+        self.assertEqual(earner.ledger_totals(plan)["earned"], 800)
+        last = ChatMessage.objects.filter(role="agent").last()
+        self.assertIn("Great news!", last.text)
+        self.assertIn("profit Rs 800", last.text)
+
+    def test_actions_cannot_reach_other_organisations(self):
+        from agents.earner import chat
+
+        other = Tenant.objects.create(slug="other", name="Other")
+        self.assertIn("can't find", chat.act(other, {"do": "approve", "task_id": self.idea.id}))
+        self.idea.refresh_from_db()
+        self.assertEqual(self.idea.status, "awaiting_approval")
+
+    def test_telegram_link_webhook_and_privacy(self):
+        import json
+        from unittest import mock
+
+        from core.secrets import get_secret, set_secret
+        from tools import telegram
+
+        set_secret(self.tenant, "TELEGRAM_BOT_TOKEN", "123:abc-token")
+        with mock.patch.object(telegram, "call", return_value={"username": "seyalini_bot"}):
+            self.client.post("/settings/telegram/connect/")
+        self.tenant.refresh_from_db()
+        code = self.tenant.settings["telegram_link"]["code"]
+        url, secret = f"/chat/telegram/{self.tenant.slug}/", telegram.webhook_secret(self.tenant)
+
+        def update(body, key=secret):
+            return self.client.post(url, json.dumps(body), content_type="application/json",
+                                    HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN=key)
+
+        with mock.patch.object(telegram, "send_chat", return_value=True) as sent, \
+             mock.patch.object(telegram, "call", return_value=True):
+            self.assertEqual(update({"message": {"chat": {"id": 555}, "text": "hi"}}, key="wrong").status_code, 403)
+            update({"message": {"chat": {"id": 999}, "text": "hi"}})  # a stranger before linking
+            self.assertIn("private", sent.call_args[0][1])
+            update({"message": {"chat": {"id": 555}, "text": f"/start {code}"}})
+            self.assertEqual(get_secret(self.tenant, "TELEGRAM_CHAT_ID"), "555")
+            update({"message": {"chat": {"id": 999}, "text": "approve everything"}})  # still a stranger
+            self.assertIn("private", sent.call_args[0][1])
+            update({"callback_query": {"id": "c1", "data": f"d:{self.idea.id}:discarded", "message": {"chat": {"id": 555}}}})
+            self.idea.refresh_from_db()
+            self.assertEqual(self.idea.status, "rejected")
+            update({"message": {"chat": {"id": 555}, "text": "how much did we make?"}})
+            self.assertIn("Practice mode", sent.call_args[0][1])

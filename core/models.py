@@ -167,3 +167,18 @@ class TenantSecret(models.Model):
 
     class Meta:
         unique_together = ("tenant", "name")
+
+
+class ChatMessage(models.Model):
+    """Your conversation with the Earner, whichever app it happens in (Seyalini chat, Telegram...)."""
+
+    ROLES = [("owner", "You"), ("agent", "Agent")]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="chat")
+    role = models.CharField(max_length=10, choices=ROLES)
+    channel = models.CharField(max_length=20, default="web")     # web | telegram
+    text = models.TextField()
+    buttons = models.JSONField(default=list, blank=True)          # [[label, action], ...]
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created"]
