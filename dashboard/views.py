@@ -22,6 +22,7 @@ from core.models import AgentCard, Approval, Event, Product, Rule, Task, Tenant
 REASON_CHIPS = {
     "short_script": ["Weak hook", "Too long", "Off-brand", "Too similar to a recent one", "Not kid-friendly", "Wrong facts"],
     "short_video": ["Too dark", "Text hard to read", "Visuals off-brand", "Boring, needs more motion", "Character looks wrong", "Not kid-friendly"],
+    "money_idea": ["Too much of my time", "Costs too much to start", "Not my kind of work", "Too slow to earn", "Too risky"],
 }
 
 
@@ -227,6 +228,15 @@ def analyst_now(request):
     return redirect("dashboard:videos")
 
 
+def _money(tenant):
+    """The Earner's totals for Today (empty when the Earner is off)."""
+    from dashboard.money_views import money_summary
+
+    if not AgentCard.objects.filter(tenant=tenant, key="earner", is_current=True, status="active").exists():
+        return None
+    return money_summary(tenant)
+
+
 @login_required
 def home(request):
     if (resp := _need_tenant(request)) is not None:
@@ -317,6 +327,7 @@ def home(request):
         "week_videos": week_videos,
         "total_views": total_views, "posted_count": len(posts), "insights": insights,
         "scouting": scouting,
+        "money": _money(t),
         "spend_inr": int(spend * INR_PER_USD),
         "budget_inr": int(budget * INR_PER_USD),
         "video_mode": ((next((a for a in agents if a.key == "marketing"), None) or AgentCard()).config or {}).get("video", {}).get("mode", "images"),

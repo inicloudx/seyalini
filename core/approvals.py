@@ -2,6 +2,7 @@
 so the same mistake does not come back.
 
 Flow: script approved -> video is produced -> video approved -> ready to publish (Step 5).
+Money idea approved ("Try it") -> the Earner writes a 14-day experiment with first drafts.
 """
 from django.db import transaction
 from django.utils import timezone
@@ -21,7 +22,7 @@ def decide(task: Task, user, decision: str, reason: str = "") -> Task:
     approval.decided_at = timezone.now()
     approval.save()
 
-    what = "video" if task.kind == "short_video" else "script"
+    what = {"short_video": "video", "money_idea": "money idea"}.get(task.kind, "script")
     if decision == "approved":
         task.status = "approved"
         Event.objects.create(tenant=task.tenant, agent_key=task.agent_key, task=task, kind="approved",
@@ -52,6 +53,7 @@ def decide(task: Task, user, decision: str, reason: str = "") -> Task:
                              message=f"Redo {what}: {approval.reason or 'no reason given'}")
     task.save()
 
+    from agents.earner import tasks as et
     from agents.marketing import tasks as mt
     from agents.publisher import tasks as pt
 
@@ -60,6 +62,8 @@ def decide(task: Task, user, decision: str, reason: str = "") -> Task:
         ("short_script", "redo"): mt.rewrite_script,
         ("short_video", "redo"): mt.remake_video,
         ("short_video", "approved"): pt.publish_video,
+        ("money_idea", "approved"): et.make_plan,
+        ("money_idea", "redo"): et.rehunt,
     }.get((task.kind, decision))
     if follow_up is not None:
         transaction.on_commit(lambda: enqueue(follow_up, task.id))

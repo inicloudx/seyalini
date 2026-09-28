@@ -63,7 +63,7 @@ class FoundationTests(TestCase):
 
     def test_tenant_loaded_with_brief_and_agents(self):
         self.assertIn("AlphaMagic", self.product.brief)
-        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 7)
+        self.assertEqual(AgentCard.objects.filter(tenant=self.tenant, is_current=True).count(), 8)
 
     def test_agent_change_creates_new_version_and_keeps_old(self):
         card, change = sync_agent(self.tenant, {"key": "marketing", "name": "Marketing", "status": "active",
@@ -890,3 +890,100 @@ class ScoutTests(TestCase):
             notes = scout._watch(agent, self.product, self.videos[1], task)
         self.assertFalse(notes["watched"])
         self.assertEqual(notes["hook"], "Wow (guess)")
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class EarnerTests(TestCase):
+    """The Earner finds money ideas in any field, plans a cheap test, tracks money and decides scale or stop."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+
+    def _idea(self):
+        from agents.earner import earner
+
+        return earner.hunt(self.tenant, n=1)[0]
+
+    def test_hunt_puts_ideas_up_for_your_check(self):
+        from agents.earner import earner
+
+        ideas = earner.hunt(self.tenant)
+        self.assertEqual(len(ideas), 5)  # ideas_per_hunt in the card
+        idea = ideas[0]
+        self.assertEqual((idea.kind, idea.status, idea.approval.decision), ("money_idea", "awaiting_approval", "pending"))
+        self.assertTrue(idea.result["how_it_makes_money"] and idea.result["you_do"])
+        self.assertIsInstance(idea.result["monthly_high_inr"], int)
+        self.assertFalse(earner.is_due(self.tenant))  # once a week
+
+    def test_ideas_that_break_house_rules_never_reach_you(self):
+        import json
+        from unittest import mock
+
+        from agents.earner import earner
+        from agents.runtime import AgentRuntime
+
+        bad = {"name": "Forex signals group", "how_it_makes_money": "Sell forex tips"}
+        good = {"name": "Wedding invite videos", "how_it_makes_money": "Couples pay Rs 999 per invite video"}
+        with mock.patch.object(AgentRuntime, "think", return_value=json.dumps({"ideas": [bad, good]})):
+            ideas = earner.hunt(self.tenant, n=2)
+        self.assertEqual([i.title for i in ideas], ["Wedding invite videos"])
+        self.assertTrue(Event.objects.filter(kind="earner_blocked").exists())
+        self.assertEqual(earner.is_blocked({"name": "Aspirational career coaching"}), "")  # no false alarm
+
+    def test_try_it_makes_a_plan_and_ledger_tracks_money(self):
+        from agents.earner import earner
+
+        idea = self._idea()
+        self.client.force_login(self.user)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{idea.id}/decide/", {"decision": "approved"})
+        plan = Task.objects.get(kind="money_plan", parent=idea)
+        self.assertEqual((plan.status, plan.result["state"]), ("done", "running"))
+        self.assertTrue(plan.result["steps"] and plan.result["drafts"])
+        self.assertLessEqual(plan.result["budget_inr"], 2000)
+
+        self.client.post(f"/money/{plan.id}/record/", {"kind": "earned", "amount": "1,500", "note": "first client"})
+        self.client.post(f"/money/{plan.id}/record/", {"kind": "spent", "amount": "300"})
+        plan.refresh_from_db()
+        self.assertEqual(earner.ledger_totals(plan), {"earned": 1500, "spent": 300, "profit": 1200})
+        with self.assertRaises(ValueError):
+            earner.record(plan, "earned", 0)
+
+        self.assertIsNone(earner.review(plan))  # not before the 14 days are up
+        r = earner.review(plan, force=True)
+        plan.refresh_from_db()
+        self.assertEqual((r["verdict"], plan.result["state"]), ("scale", "scaling"))
+        self.assertIn("scale", earner._lessons(self.tenant))  # the next hunt learns from it
+
+    def test_change_something_learns_and_brings_a_new_idea(self):
+        idea = self._idea()
+        self.client.force_login(self.user)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{idea.id}/decide/", {"decision": "redo", "chip": "Too much of my time"})
+        self.assertTrue(Rule.objects.filter(agent_key="earner", text="Too much of my time").exists())
+        self.assertEqual(Task.objects.filter(kind="money_idea", status="awaiting_approval").count(), 1)
+
+    def test_experiments_that_end_get_a_verdict(self):
+        from agents.earner import earner
+
+        idea = self._idea()
+        plan = earner.plan(idea)
+        plan.result["ends"] = (timezone.now() - timedelta(days=1)).isoformat()
+        plan.save()
+        self.assertEqual(earner.run_reviews(self.tenant), 1)
+        plan.refresh_from_db()
+        self.assertEqual(plan.result["state"], "stopped")  # earned nothing
+
+    def test_money_page_and_today_card(self):
+        idea = self._idea()
+        self.client.force_login(self.user)
+        page = self.client.get("/money/").content.decode()
+        self.assertIn(idea.title, page)
+        self.assertIn("Try it", page)
+        today = self.client.get("/").content.decode()
+        self.assertIn("1 new idea waiting", today)
+        self.assertIn(idea.title, today)  # also in "Needs you"
+        self.client.post("/money/hunt/", {"note": "earn in dollars"})
+        self.assertEqual(Task.objects.filter(kind="money_idea").count(), 6)

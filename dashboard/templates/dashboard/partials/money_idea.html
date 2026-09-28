@@ -1,0 +1,47 @@
+{% with i=task.result %}
+<article class="card stack" id="task-{{ task.id }}">
+  <div class="row" style="justify-content:space-between;gap:6px">
+    <span class="pill" style="color:var(--idea)">Money idea · {{ i.field }}</span>
+    <span class="muted small">Earner · {{ task.created|timesince }} ago</span>
+  </div>
+  <h3>{{ i.name }}</h3>
+  <p style="margin:0">{{ i.how_it_makes_money }}</p>
+  <div class="row small" style="gap:6px">
+    <span class="pill ok">₹{{ i.monthly_low_inr }}–₹{{ i.monthly_high_inr }} a month</span>
+    <span class="pill">First ₹ in ~{{ i.first_rupee_days }} days</span>
+    <span class="pill">Start cost ₹{{ i.startup_cost_inr }}</span>
+    <span class="pill">Your time {{ i.owner_hours_per_week }} h/week</span>
+    {% if i.score %}<span class="pill info">Confidence {{ i.score }}/10</span>{% endif %}
+  </div>
+  {% if i.why_now %}<p class="small" style="margin:0;color:var(--info)">Why now: {{ i.why_now }}</p>{% endif %}
+  <details><summary class="small muted">Who does what, and the risks ▾</summary>
+    <div class="stack small" style="margin-top:8px;gap:8px">
+      <div><b>The AI does:</b> {{ i.ai_does|join:", " }}</div>
+      <div><b>You do:</b> {{ i.you_do|join:", " }}</div>
+      <div><b>Risk:</b> {{ i.risks }}</div>
+      {% if i.sources %}<div><b>Based on:</b> {% for s in i.sources %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.title|truncatechars:40 }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+  </details>
+
+  {% if can_review %}
+  <form hx-post="{% url 'dashboard:decide' task.id %}" hx-target="#task-{{ task.id }}" hx-swap="outerHTML" hx-disabled-elt="find button"
+        method="post" action="{% url 'dashboard:decide' task.id %}" class="stack">
+    {% csrf_token %}
+    <button class="btn good wide" name="decision" value="approved">✓ Try it → make a 14-day plan</button>
+    <details>
+      <summary class="btn wide" style="display:flex">Change something</summary>
+      <div class="stack" style="margin-top:10px">
+        <fieldset style="border:0;padding:0;margin:0" class="row">
+          <legend class="small muted" style="margin-bottom:6px">What's wrong with it? The Earner remembers this.</legend>
+          {% for c in task.chips %}<label class="chip"><input type="radio" name="chip" value="{{ c }}"> {{ c }}</label>{% endfor %}
+        </fieldset>
+        <label class="small muted" for="reason-{{ task.id }}">Or say it in your words</label>
+        <input id="reason-{{ task.id }}" name="reason" placeholder="e.g. Something I can sell abroad in dollars" style="min-height:48px;border:1px solid var(--line);border-radius:12px;padding:0 14px;background:var(--panel);color:var(--ink);font:inherit">
+        <button class="btn primary wide" name="decision" value="redo">Give me a better idea</button>
+      </div>
+    </details>
+    <button class="btn wide" name="decision" value="discarded" style="color:var(--bad)">✕ Not for me</button>
+  </form>
+  {% endif %}
+</article>
+{% endwith %}

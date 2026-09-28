@@ -28,11 +28,14 @@ Plan idea -> Script -> Video (Veo clip + images + voice-over) -> Your check -> P
 | Videos tab: play, download, delete, free up space, post / retry YouTube, check views | `dashboard/views.py` `videos*` | done |
 | Multi-organisation: own logins, roles (owner/reviewer/viewer), encrypted keys, budgets | `core/` | done |
 | Installable on phone (PWA) | `dashboard/pwa.py` | done |
+| Earner agent: money ideas in ANY field outside ours (web research), "Try it" -> 14-day plan + drafts, ₹ ledger, scale/stop verdicts; Money page `/money/` + Today card | `agents/earner/`, `dashboard/money_views.py`, 08:00 weekly hunt + 21:30 reviews | done (proposes only, never spends) |
 | **Runs by itself 24/7** | Celery beat on a server | **NOT YET: next task below** |
 | Instagram / Facebook, installs per video, YouTube audit | - | planned |
 
 Agents (cards in `tenants/<org>/agents/*.yaml`, versioned in DB by `load_tenants`):
-marketing, publisher, analyst, scout (active), manager / catalyst / developer (planned).
+marketing, publisher, analyst, scout, earner (active), manager / catalyst / developer (planned).
+Earner house rules (legal in India, no gambling/trading/MLM/spam...) are in the prompt AND a keyword net
+`agents/earner/earner.py BLOCKED`; fields to stay out of and the ₹ cap per experiment are in `earner.yaml`.
 
 ## 2. Tech
 
@@ -43,7 +46,7 @@ marketing, publisher, analyst, scout (active), manager / catalyst / developer (p
 - AI: LiteLLM for text; `google-genai` for images, Veo, TTS. Prices newer than LiteLLM's table are in `agents/llm.py FALLBACK_PRICES`.
 - Video: ffmpeg from `imageio-ffmpeg` (see ARM note in section 5), Pillow overlays.
 - Settings load `.env` themselves (`config/settings.py _load_dotenv`).
-- Tests: `python manage.py test core` (49 tests, dry-run AI, fake YouTube). Keep them green.
+- Tests: `python manage.py test core` (59 tests, dry-run AI, fake YouTube). Keep them green.
 
 Money rules: every agent has `monthly_budget_usd`; `AgentRuntime.ensure_budget()` stops jobs at the cap.
 Marketing = $15/month (1 hybrid Short/day ≈ ₹40). Google Cloud budget alert ₹1,000 (raise to ~₹1,500).

@@ -117,7 +117,7 @@ details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-
 
   {% with n=request.resolver_match.url_name %}
   <nav class="tabs" aria-label="Main">
-    <a class="{% if n == 'home' %}on{% endif %}" href="{% url 'dashboard:home' %}" {% if n == 'home' %}aria-current="page"{% endif %}>
+    <a class="{% if n == 'home' or n == 'money' %}on{% endif %}" href="{% url 'dashboard:home' %}" {% if n == 'home' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>Today{% if nav_pending %} <span class="badge">{{ nav_pending }}</span>{% endif %}</span></a>
     <a class="{% if n == 'videos' %}on{% endif %}" href="{% url 'dashboard:videos' %}" {% if n == 'videos' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="M17 10l4-2v8l-4-2"/></svg><span>Videos</span></a>

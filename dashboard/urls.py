@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import product_views, settings_views, views
+from . import money_views, product_views, settings_views, views
 
 app_name = "dashboard"
 urlpatterns = [
@@ -17,6 +17,11 @@ urlpatterns = [
     path("scout/run/", views.scout_now, name="scout_now"),
     path("videos/<int:task_id>/publish/", views.video_publish, name="video_publish"),
     path("advanced/", views.advanced, name="advanced"),
+    path("money/", money_views.money, name="money"),
+    path("money/hunt/", money_views.money_hunt, name="money_hunt"),
+    path("money/<int:task_id>/record/", money_views.money_record, name="money_record"),
+    path("money/<int:task_id>/stop/", money_views.money_stop, name="money_stop"),
+    path("money/<int:task_id>/review/", money_views.money_review, name="money_review"),
     path("settings/", settings_views.settings_home, name="settings"),
     path("settings/youtube/connect/", settings_views.youtube_connect, name="youtube_connect"),
     path("settings/youtube/callback/", settings_views.youtube_callback, name="youtube_callback"),

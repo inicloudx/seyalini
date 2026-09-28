@@ -1,5 +1,12 @@
 <article class="card stack" id="task-{{ task.id }}" role="status">
-  {% if task.status == "approved" %}
+  {% if task.kind == "money_idea" %}
+    {% if task.status == "approved" %}<span class="pill ok" style="align-self:flex-start">✓ Trying it</span>
+    <p style="margin:0">The Earner is writing a 14-day plan with ready-to-use drafts. Find it in <a href="{% url 'dashboard:money' %}">Money</a>.</p>
+    {% elif task.approval.decision == "discarded" %}<span class="pill bad" style="align-self:flex-start">✕ Not for you</span>
+    <p style="margin:0">Dropped{% if task.approval.reason %}. The Earner will avoid: “{{ task.approval.reason }}”{% endif %}.</p>
+    {% else %}<span class="pill warn" style="align-self:flex-start">↻ New idea coming</span>
+    <p style="margin:0">The Earner is thinking of a better one{% if task.approval.reason %} and will remember: “{{ task.approval.reason }}”{% endif %}.</p>{% endif %}
+  {% elif task.status == "approved" %}
     <span class="pill ok" style="align-self:flex-start">✓ Approved</span>
     <p style="margin:0">{% if task.kind == "short_video" %}<b>{{ task.result.title|cut:"[Sample] " }}</b> is ready. Find it in <a href="{% url 'dashboard:videos' %}">Videos</a>.{% else %}Great, the AI is now making the video. It appears here in 1–2 minutes.{% endif %}</p>
   {% elif task.approval.decision == "discarded" %}
