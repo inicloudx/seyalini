@@ -1,8 +1,9 @@
+# Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
 key: manager
 name: Manager
-role: Runs today - turns goals into tasks, reviews output, weekly report
-status: planned
-autonomy: 2
+role: Your line to the team - sends every script and video to your phone for a yes or no, answers questions, acts on plain words
+status: active
+autonomy: 2                 # acts only when you clearly ask; never posts anything you did not approve
 model: gemini/gemini-3.5-flash-lite
-monthly_budget_usd: 2
-changelog: Placeholder until Step 8
+monthly_budget_usd: 2       # chat replies (~$0.001 each)
+changelog: Telegram approvals and chat (Approve / Change / Reject buttons, questions in plain words)

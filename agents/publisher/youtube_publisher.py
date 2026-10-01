@@ -18,6 +18,17 @@ def is_connected(tenant) -> bool:
                 and get_secret(tenant, "YOUTUBE_CLIENT_SECRET"))
 
 
+def made_for_kids(video_task: Task) -> bool:
+    """Per content idea: a pillar's audience decides (kids -> yes, adults -> no); else the app's default."""
+    cfg = video_task.product.config or {}
+    script = video_task.parent if video_task.parent and video_task.parent.kind == "short_script" else None
+    key = ((script.payload or {}).get("pillar") if script else "") or ""
+    audience = next((p.get("audience") for p in cfg.get("pillars") or [] if p.get("key") == key), None)
+    if audience in ("kids", "adults"):
+        return audience == "kids"
+    return bool(cfg.get("youtube_made_for_kids", False))
+
+
 def build_metadata(video_task: Task) -> dict:
     product = video_task.product
     cfg = product.config or {}
@@ -32,7 +43,7 @@ def build_metadata(video_task: Task) -> dict:
         lines += ["", f"Download {product.name}: {tracked}"]
     lines += ["", f"{hashtags} #Shorts".strip()]
     return {"title": (r.get("title") or product.name).replace("[Sample] ", "")[:100], "description": "\n".join(lines),
-            "tags": tags + [product.name], "made_for_kids": bool(cfg.get("youtube_made_for_kids", False))}
+            "tags": tags + [product.name], "made_for_kids": made_for_kids(video_task)}
 
 
 def publish(video_task: Task, force: bool = False) -> Task | None:
@@ -66,11 +77,17 @@ def publish(video_task: Task, force: bool = False) -> Task | None:
         task.result = {"error": str(exc)[:500]}
         task.save()
         agent.log("task_failed", f"YouTube upload failed: {str(exc)[:200]}", task=task)
+        from agents.manager import chat as manager
+
+        manager.notify(tenant, f"⚠️ YouTube upload failed for {meta['title']}: {str(exc)[:200]}\nRetry it in Seyalini → Videos.")
         raise
     url = None if agent.dry_run else f"https://youtube.com/shorts/{vid}"
     task.status = "done"
     task.result = {"platform": "youtube", "video_id": vid, "url": url, "privacy": privacy, "channel": channel,
-                   "practice": agent.dry_run}
+                   "made_for_kids": meta["made_for_kids"], "practice": agent.dry_run}
     task.save()
     agent.log("published", f"Posted to YouTube ({privacy}){' [practice]' if agent.dry_run else ''}: {meta['title']}", task=task)
+    from agents.manager import chat as manager
+
+    manager.posted(task)
     return task

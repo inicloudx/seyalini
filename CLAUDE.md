@@ -5,7 +5,7 @@ Android AR apps (AlphaMagic AR first) with daily YouTube Shorts. The founder (Ni
 
 - Vision, users and roadmap: the "Seyalini — Vision, Goal and Plan" doc (claude.ai artifact).
 - Owner: Nithy, GitHub `inicloudx/seyalini`. Never use the old name "ReachStack" anywhere.
-- Status date of this file: 27 Sep 2026.
+- Status date of this file: 1 Oct 2026.
 
 ## 1. What works today (the loop)
 
@@ -24,15 +24,18 @@ Plan idea -> Script -> Video (Veo clip + images + voice-over) -> Your check -> P
 | Review: Approve / Change something (redo + learned rule) / Reject (discard) | `core/approvals.py`, `partials/approval.html` | done |
 | Publisher agent: YouTube upload (OAuth per organisation, private until Google audit) | `agents/publisher/`, `tools/youtube.py`, Settings -> YouTube | done |
 | Analyst agent: YouTube views/likes, scores pillars, insights on Today | `agents/analyst/` | done |
+| "Why so few views?" check: Analyst compares our Shorts with the Scout's top Shorts, Gemini watches our 2 latest public ones, gives causes + exactly 3 fixes (Marketing / You) + a test; Marketing fixes become `Rule`s (source `analyst`) only after your yes (or "use fixes 1 and 3" in chat). Videos tab button, Manager chat, Today card | `agents/analyst/diagnose.py` | done |
+| Made for Kids per content idea: pillar `audience: kids|adults` (product.yaml or "Name | idea | adults" in the editor); adults ideas are written for parents/teachers and uploaded NOT made for kids; kids ideas stay made for kids | `publisher.made_for_kids()`, planner, script_writer, strategist | done |
+| Manager agent = approvals from your phone: every script and video (the video itself) goes to Telegram with Approve / Change / Reject; "Change" asks what, the next message is the redo note; posted / failed alerts; plain-word chat (what's waiting, make a Short, check views, study trends); also in-app `/chat/` (💬) | `agents/manager/chat.py`, `dashboard/chat_views.py`, `tools/telegram.py`, `ChatMessage`, Settings -> Approve from your phone | done |
 | Scout agent: daily study of top Shorts (YouTube search + Gemini watches them), proven patterns fed to every script, "What's working on YouTube" card | `agents/scout/`, 06:00 in `config/celery.py` | done |
 | Videos tab: play, download, delete, free up space, post / retry YouTube, check views | `dashboard/views.py` `videos*` | done |
 | Multi-organisation: own logins, roles (owner/reviewer/viewer), encrypted keys, budgets | `core/` | done |
 | Installable on phone (PWA) | `dashboard/pwa.py` | done |
-| **Runs by itself 24/7** | Celery beat on a server | **NOT YET: next task below** |
+| **Runs by itself 24/7** | Docker on the server shared with Earnly (section 5) | **NOT YET: next task below** |
 | Instagram / Facebook, installs per video, YouTube audit | - | planned |
 
 Agents (cards in `tenants/<org>/agents/*.yaml`, versioned in DB by `load_tenants`):
-marketing, publisher, analyst, scout (active), manager / catalyst / developer (planned).
+marketing, publisher, analyst, scout, manager (active), catalyst / developer (planned).
 
 ## 2. Tech
 
@@ -66,48 +69,67 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py load_tenants
 python manage.py runserver        # http://127.0.0.1:8000
+python manage.py telegram_poll    # 2nd window, only if Telegram is connected: phone replies on a laptop
 ```
 Laptop `.env`: `JOBS_MODE=thread`, `GEMINI_API_KEY=...`, same `DJANGO_SECRET_KEY` on every laptop.
 
-## 5. NEXT TASK: host Seyalini at https://seyalini.inixr.com on its own Oracle server
+## 5. NEXT TASK: host Seyalini at https://seyalini.inixr.com (Docker, on the server it shares with Earnly)
 
-Decided 27 Sep 2026: the inixr.com website server is too small (1 GB RAM, no swap; its nginx runs inside
-Docker), so Seyalini gets its **own free Oracle server** and subdomain. The website server is never touched.
-`URL_PREFIX` stays empty (sub-path support still works and is tested, if ever needed).
+Decided 1 Oct 2026: both free Oracle micro servers are used (inixr.com website; Earnly), so Seyalini runs in
+Docker on **Earnly's server** (129.225.118.237, Ubuntu 24.04, x86, 1 GB RAM + swap), like Earnly does.
+Earnly works 24/7 and has priority; Seyalini works a few hours a day.
 
-1. **Server:** Oracle Console -> Compute -> Create instance. Ubuntu 24.04, shape **VM.Standard.A1.Flex
-   2 OCPU / 12 GB** (Always Free; pick the aarch64 image). If A1 is "out of capacity", VM.Standard.E2.1.Micro
-   (also free; setup.sh adds swap). Same SSH key as the website server. Check "Always Free-eligible".
-2. **Oracle network:** in the instance's VCN Security List, add Ingress 0.0.0.0/0 TCP 80 and 443.
-3. **DNS:** A record `seyalini` -> the server's public IP (where inixr.com's DNS is managed).
-4. **GitHub deploy key + setup:** copy `deploy/setup.sh` to the server, `sudo bash setup.sh`. It stops twice:
-   (a) prints a deploy key: add it in GitHub -> inicloudx/seyalini -> Settings -> Deploy keys (read-only);
-   (b) asks for `GEMINI_API_KEY` in `/opt/seyalini/app/.env` (it generates the Django and encryption secrets:
-   save them in a password manager). Re-run after each stop. It installs packages, system ffmpeg
-   (`IMAGEIO_FFMPEG_EXE`), redis, the three systemd services, nginx, sudoers for restarts, 02:30 backup cron,
-   and opens 80/443 in Ubuntu's iptables (Oracle images block everything but SSH).
-5. **HTTPS and login:** the two commands setup.sh prints at the end (certbot, `createsuperuser` as `nithy`).
-6. **YouTube:** Google Cloud (project "seyalini") -> Clients -> add redirect URI
-   `https://seyalini.inixr.com/settings/youtube/callback/`. Then Seyalini Settings -> YouTube: paste client
-   ID/secret, Connect, choose the channel (laptop used "Ini Cloudx"; Nithy may prefer "Inixr digital").
-7. **Smoke test:** open the site, New Short, approve script and video, check it posts to YouTube,
-   "Check views now" works, next morning a 07:00 script appears. Then on the phone "Add to Home screen".
-8. **Updates:** push from the laptop, then on the server `sudo -u seyalini /opt/seyalini/app/deploy/update.sh`.
+How the two share the server:
+- **Front door: NOT DECIDED YET (1 Oct 2026).** Earnly's nginx owns ports 80/443, and Nithy's rule is
+  **never change anything on Earnly's side** (repo, containers, config). So Earnly cannot forward
+  seyalini.inixr.com. The first design did that; it is rejected, and `docker-compose.yml` here still carries
+  its leftovers (the `earnly_default` network on `nginx`, no public port) which must be reworked before hosting.
+  Likely answer: Seyalini's own nginx on its own port (e.g. `https://seyalini.inixr.com:8443`; Telegram webhooks
+  allow 8443) with its own certificate. Decide with Nithy first.
+- **Containers** (`docker-compose.yml`): `redis` (queue), `web` (gunicorn, 1 process; Telegram replies run in its
+  threads: `CHAT_JOBS_MODE=thread`), `worker` (celery solo pool + beat `-B`), `nginx` (static, media, proxy).
+  Memory limits on each, `cpu_shares: 512` on the worker, `FFMPEG_THREADS=1`.
+- **The worker sleeps** (`WORKER_SLEEPS=1`, `core/worker_sleep.py`): it stops itself after 15 idle minutes outside
+  `WORK_WINDOWS` (India time, around the 06:00 / 07:00 / 14:00 / 21:00 jobs). `deploy/worker-wake.sh` (cron, every
+  minute) starts it when a window opens or a job waits in Redis (e.g. you approved a script on Telegram).
+- **Data** (volume `seyalini_data` -> `/app/data`): `db.sqlite3`, `media/`, `tenants/`. `seed_tenants` copies
+  `tenants/` from the code on first start; later only agent cards are refreshed from git, apps and organisation
+  settings belong to the dashboard on the server.
+
+### Steps
+
+1. **DNS:** A record `seyalini` -> 129.225.118.237 (Namecheap, same place as `earnly`).
+2. **Front door:** rework per the decision above (nothing on Earnly's side).
+3. **Seyalini code:** copy `deploy/server-setup.sh` to the server, `bash server-setup.sh` (as ubuntu). It adds 3 GB
+   swap, makes a GitHub deploy key (add it in GitHub -> inicloudx/seyalini -> Settings -> Deploy keys, read-only,
+   run again), clones to `~/seyalini`, installs the wake-up cron and the 03:15 backup.
+4. **Start:** `cd ~/seyalini && ./deploy.sh` (makes `.env` with new secrets: save them). Put `GEMINI_API_KEY` in
+   `~/seyalini/.env`, run `./deploy.sh` again. First build takes several minutes.
+5. **https:** Seyalini's own certificate (script to be written with the front-door rework).
+6. **Login:** `cd ~/seyalini && docker compose exec web python manage.py createsuperuser --username nithy`.
+7. **YouTube:** Google Cloud (project "seyalini") -> Clients -> add redirect URI
+   `https://seyalini.inixr.com/settings/youtube/callback/`; then Settings -> YouTube: client ID/secret, Connect.
+8. **Telegram:** Settings -> Approve from your phone -> Connect my phone (one time; the server uses a webhook,
+   so `telegram_poll` is NOT needed there, and must not run on the laptop for the same bot at the same time).
+9. **Smoke test:** New Short -> approve on Telegram -> video -> approve -> posted. Next morning: 06:00 Scout,
+   07:00 script. Check `docker compose ps -a`: the worker shows "Exited (0)" when asleep; that is normal.
+10. **Updates:** push from the laptop, then on the server `cd ~/seyalini && ./deploy.sh`.
 
 ### Gotchas
 
-- Fresh server DB: `tenants/inixr/tenant.yaml` carries the laptop's YouTube channel name, but Settings only
-  shows "Connected" when the login token exists, so reconnect on the server as in step 6.
-- `tenants/inixr/products/` also has two leftover AlphaMagic copies (`alpha-magic`, `alpha-magic-2`); the
-  dashboard offers to archive them. Tests use a clean copy with only `alphamagic`.
-- Video rendering is CPU-heavy: worker concurrency is 1 on purpose.
+- Fresh server DB: reconnect YouTube and Telegram there (steps 7-8); the laptop keeps its own database.
+- `tenants/inixr/products/` has two leftover AlphaMagic copies (`alpha-magic`, `alpha-magic-2`); the dashboard
+  offers to archive them. Tests use a clean copy with only `alphamagic`.
+- Videos render slowly on this server (one ffmpeg thread, swap): several minutes each. Fine for 1-2 a day.
+- Logs: `docker compose logs -f worker` / `web`. Worker stuck asleep with work waiting: `docker start seyalini_worker`
+  and check `crontab -l` has `worker-wake.sh`.
 - Media files are served by nginx without login (URLs are hard to guess). Fine for marketing videos.
-- `DJANGO_DEBUG=0` on the server, otherwise secure cookies and proxy https are off.
 - YouTube uploads stay **private** until Google's API audit; publisher setting `youtube_privacy` in
   `tenants/inixr/agents/publisher.yaml`.
 - Google retired Gemini 2.5 for new users (Sep 2026). Current IDs are in the agent YAML and `video_producer.py DEFAULTS`.
 - Veo on the Gemini Developer API rejects `generate_audio` and `negativePrompt`; `tools/veo.py` drops unsupported options automatically.
-- Oracle may reclaim Always Free instances that stay nearly idle; the daily jobs should keep it active.
+- Never touch Earnly from Seyalini work: not its repo, containers, volumes, nginx or `.env`. And never
+  `git add` in `C:\Projects\earnly` from a Seyalini session (a staged file once got swept into an Earnly commit).
 
 ## 6. After hosting (roadmap)
 

@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from dashboard import pwa
+from dashboard import chat_views, pwa
 
 admin.site.site_header = "Seyalini admin"
 
@@ -14,6 +14,7 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("manifest.webmanifest", pwa.manifest, name="manifest"),
     path("sw.js", pwa.service_worker, name="sw"),
+    path("chat/telegram/<slug:slug>/", chat_views.telegram_webhook, name="telegram_webhook"),  # no login: secret header
     path("", include("dashboard.urls")),
 ]
 

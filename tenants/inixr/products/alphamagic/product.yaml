@@ -31,19 +31,24 @@ config:
     name: Letter of the Day
     idea: One letter comes alive in AR
     uses_letter: true
+    audience: kids
   - key: watch_the_magic
     name: Watch the Magic
     idea: App demo, the AR reveal moment
+    audience: kids
   - key: parent_tip
     name: Parent Tip
     idea: Learning through play, practical tip for parents
+    audience: adults
   - key: word_fun_fact
     name: Word Fun Fact
     idea: Fun fact tied to a letter's word
     uses_letter: true
+    audience: kids
   - key: teacher_corner
     name: Teacher Corner
     idea: How preschool and primary teachers use AR in class (B2B)
+    audience: adults
   letter_words:
     A: Aeroplane
     B: Boat

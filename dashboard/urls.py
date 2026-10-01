@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import product_views, settings_views, views
+from . import chat_views, product_views, settings_views, views
 
 app_name = "dashboard"
 urlpatterns = [
@@ -14,9 +14,13 @@ urlpatterns = [
     path("videos/<int:task_id>/delete/", views.video_delete, name="video_delete"),
     path("videos/cleanup/", views.videos_cleanup, name="videos_cleanup"),
     path("videos/check/", views.analyst_now, name="analyst_now"),
+    path("videos/why/", views.diagnose_now, name="diagnose_now"),
     path("scout/run/", views.scout_now, name="scout_now"),
     path("videos/<int:task_id>/publish/", views.video_publish, name="video_publish"),
     path("advanced/", views.advanced, name="advanced"),
+    path("chat/", chat_views.chat_page, name="chat"),
+    path("chat/send/", chat_views.chat_send, name="chat_send"),
+    path("settings/telegram/connect/", chat_views.telegram_connect, name="telegram_connect"),
     path("settings/", settings_views.settings_home, name="settings"),
     path("settings/youtube/connect/", settings_views.youtube_connect, name="youtube_connect"),
     path("settings/youtube/callback/", settings_views.youtube_callback, name="youtube_callback"),

@@ -36,6 +36,9 @@
   </div>
   {% endfor %}
 </div>
-{% if youtube_on and can_review %}<form method="post" action="{% url 'dashboard:analyst_now' %}">{% csrf_token %}<button class="btn small">↻ Check views now</button></form>{% endif %}
+{% if youtube_on and can_review %}<div class="row">
+  <form method="post" action="{% url 'dashboard:analyst_now' %}">{% csrf_token %}<button class="btn small">↻ Check views now</button></form>
+  <form method="post" action="{% url 'dashboard:diagnose_now' %}">{% csrf_token %}<button class="btn small">🔍 Why so few views?</button></form>
+</div>{% endif %}
 <p class="muted small">{% if youtube_on %}Approved videos post to YouTube automatically. Instagram and Facebook are next.{% else %}<a href="{% url 'dashboard:settings' %}#youtube">Connect YouTube</a> and approved videos post automatically.{% endif %}</p>
 {% endblock %}

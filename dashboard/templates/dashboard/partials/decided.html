@@ -1,5 +1,12 @@
 <article class="card stack" id="task-{{ task.id }}" role="status">
-  {% if task.status == "approved" %}
+  {% if task.kind == "view_diagnosis" %}
+    {% if task.approval.decision == "approved" %}<span class="pill ok" style="align-self:flex-start">✓ Using the fixes</span>
+    <p style="margin:0">The Marketing fixes are now rules for every new script. Do the “You” fixes when you can.</p>
+    {% elif task.approval.decision == "discarded" %}<span class="pill bad" style="align-self:flex-start">✕ Not used</span>
+    <p style="margin:0">Nothing changed{% if task.approval.reason %}; the Analyst will remember: “{{ task.approval.reason }}”{% endif %}.</p>
+    {% else %}<span class="pill warn" style="align-self:flex-start">↻ Looking again</span>
+    <p style="margin:0">The Analyst is checking again{% if task.approval.reason %} with your note: “{{ task.approval.reason }}”{% endif %}.</p>{% endif %}
+  {% elif task.status == "approved" %}
     <span class="pill ok" style="align-self:flex-start">✓ Approved</span>
     <p style="margin:0">{% if task.kind == "short_video" %}<b>{{ task.result.title|cut:"[Sample] " }}</b> is ready. Find it in <a href="{% url 'dashboard:videos' %}">Videos</a>.{% else %}Great, the AI is now making the video. It appears here in 1–2 minutes.{% endif %}</p>
   {% elif task.approval.decision == "discarded" %}

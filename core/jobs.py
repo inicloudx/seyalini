@@ -14,8 +14,8 @@ from django.db import close_old_connections
 log = logging.getLogger("seyalini")
 
 
-def enqueue(task, *args):
-    mode = getattr(settings, "JOBS_MODE", "celery")
+def enqueue(task, *args, mode: str = ""):
+    mode = mode or getattr(settings, "JOBS_MODE", "celery")
     if mode == "celery":
         return task.delay(*args)
     if mode == "sync":

@@ -15,7 +15,7 @@ from django.conf import settings
 
 from agents.runtime import AgentRuntime
 from core.models import Approval, Task
-from tools import editor, imagegen, telegram, tts, veo
+from tools import editor, imagegen, tts, veo
 from tools.fonts import use_brand_fonts
 
 DEFAULTS = {
@@ -155,6 +155,9 @@ def produce_video(script_task: Task, redo_of: Task | None = None) -> Task:
         task.result = {"error": str(exc)[:500]}
         task.save()
         agent.log("task_failed", f"Video failed: {str(exc)[:200]}", task=task)
+        from agents.manager import chat as manager
+
+        manager.notify(product.tenant, f"⚠️ The video for “{script.get('title', '')}” failed: {str(exc)[:200]}")
         raise
 
     rel = lambda p: str(Path(p).relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
@@ -165,5 +168,7 @@ def produce_video(script_task: Task, redo_of: Task | None = None) -> Task:
     task.save()
     Approval.objects.create(tenant=product.tenant, task=task)
     agent.log("awaiting_approval", f"Video ready for review ({info['seconds']:.0f}s): {script.get('title')}", task=task)
-    telegram.notify_video(task, out_dir / "final.mp4")
+    from agents.manager import chat as manager
+
+    manager.ask_video(task, out_dir / "final.mp4")  # the video itself, with Approve / Change / Reject
     return task

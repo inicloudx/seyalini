@@ -6,6 +6,7 @@ extra has to be installed on Windows, Mac or Linux.
 - on-screen text, a logo badge and an end card are drawn with Pillow
 - a spoken voice-over per scene (Gemini TTS), optional background music from assets/music
 """
+import os
 import random
 import subprocess
 from dataclasses import dataclass
@@ -28,7 +29,10 @@ class Scene:
 
 
 def ffmpeg(*args, cwd: Path | None = None):
-    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", *map(str, args)]
+    args = [str(a) for a in args]
+    if threads := os.environ.get("FFMPEG_THREADS"):  # small server: fewer threads = much less memory
+        args = ["-filter_complex_threads", threads, *args[:-1], "-threads", threads, args[-1]]
+    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", *args]
     res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if res.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {res.stderr.strip()[-600:]}")

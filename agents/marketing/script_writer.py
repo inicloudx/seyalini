@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from agents.runtime import AgentRuntime
 from core.models import Approval, Product, Task
-from tools import telegram
 
 from .planner import plan_next
 
@@ -41,6 +40,11 @@ Reply with ONLY a JSON object:
 def _user_prompt(product: Product, plan: dict, rules: list[str], avoid: list[str], redo: dict | None) -> str:
     parts = [f"# Brand brief\n{product.brief}",
              f"# Today's plan\nPillar: {plan['pillar_name']} - {plan['pillar_idea']}\nSlot: {plan['slot']}"]
+    if plan.get("audience") == "adults":
+        parts.append("Audience: ADULTS (parents, teachers). Speak to them about their child or class, not to the child. "
+                     "This Short is not made for kids.")
+    elif plan.get("audience") == "kids":
+        parts.append("Audience: young children watching with a parent. This Short is made for kids.")
     if plan.get("letter"):
         if plan.get("word"):
             parts.append(f"Letter: {plan['letter']} for {plan['word']}. This is the real 3D scene in the app for this letter: "
@@ -135,7 +139,9 @@ def write_script(product: Product, slot: str = "any", redo_of: Task | None = Non
     task.save()
     Approval.objects.create(tenant=product.tenant, task=task)
     agent.log("awaiting_approval", f"Script ready for review: {script['title']}", task=task)
-    telegram.notify_script(task)
+    from agents.manager import chat as manager
+
+    manager.ask_script(task)  # to your phone, with Approve / Change / Reject
     return task
 
 

@@ -123,7 +123,8 @@ class Approval(models.Model):
 class Rule(models.Model):
     """Company memory: lessons that every future run of an agent must follow."""
 
-    SOURCES = [("rejection", "Your rejection"), ("manual", "Written by you"), ("catalyst", "Catalyst")]
+    SOURCES = [("rejection", "Your rejection"), ("manual", "Written by you"), ("catalyst", "Catalyst"),
+               ("analyst", "Analyst fix you approved")]
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="rules")
     agent_key = models.SlugField()
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True)
@@ -167,3 +168,18 @@ class TenantSecret(models.Model):
 
     class Meta:
         unique_together = ("tenant", "name")
+
+
+class ChatMessage(models.Model):
+    """Your conversation with the Manager agent, whichever app it happens in (Seyalini chat, Telegram...)."""
+
+    ROLES = [("owner", "You"), ("agent", "Agent")]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="chat")
+    role = models.CharField(max_length=10, choices=ROLES)
+    channel = models.CharField(max_length=20, default="web")     # web | telegram
+    text = models.TextField()
+    buttons = models.JSONField(default=list, blank=True)          # [[label, action], ...]
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created", "id"]  # same-millisecond messages keep their order

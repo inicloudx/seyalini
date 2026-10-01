@@ -7,7 +7,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 app = Celery("seyalini")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks(["agents.marketing", "agents.publisher", "agents.analyst", "agents.scout"])
+app.autodiscover_tasks(["agents.marketing", "agents.publisher", "agents.analyst", "agents.scout", "agents.manager"])
 
 # The company clock (India time). Scripts are written early so you can approve
 # them before the posting slots in Step 5 (9 AM and 6 PM).
@@ -31,3 +31,8 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=21, minute=0),
     },
 }
+
+# small shared server: sleep when there is no work (WORKER_SLEEPS=1)
+from core import worker_sleep  # noqa: E402
+
+worker_sleep.install(app)

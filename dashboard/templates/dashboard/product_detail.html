@@ -51,7 +51,7 @@
     <summary class="row" style="justify-content:space-between"><b>Edit the details</b><span class="muted small">For fine-tuning ▾</span></summary>
     <div class="form" style="margin-top:12px">
       <div><label for="id_brief">Full brief (the AI reads this before every task)</label>{{ form.brief }}</div>
-      <div><label for="id_pillars">Content ideas</label>{{ form.pillars }}<div class="help">One per line: Name | idea. Add “| letters” to go through A–Z.</div></div>
+      <div><label for="id_pillars">Content ideas</label>{{ form.pillars }}<div class="help">One per line: Name | idea. Add “| letters” to go through A–Z, and “| kids” or “| adults” for who it speaks to (kids = Made for Kids on YouTube).</div></div>
       <div><label for="id_visual_style">Look of the videos</label>{{ form.visual_style }}<div class="help">Added to every picture the AI makes.</div></div>
       <button class="btn primary" type="submit">{% if draft %}Save and start marketing{% else %}Save changes{% endif %}</button>
     </div>

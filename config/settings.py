@@ -5,7 +5,8 @@ from pathlib import Path
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-TENANTS_DIR = BASE_DIR / "tenants"
+# In Docker the tenants folder lives on the data volume (the dashboard writes logos, briefs and settings there)
+TENANTS_DIR = Path(os.environ["TENANTS_DIR"]) if os.environ.get("TENANTS_DIR") else BASE_DIR / "tenants"
 
 
 def _load_dotenv(path: Path):
@@ -120,8 +121,21 @@ CELERY_BROKER_URL = env("REDIS_URL", "redis://localhost:6379/0")
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_EAGER", False)
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_SERIALIZER = "json"
+# Chat replies and Yes/No taps get their own worker (seyalini-chat), so they never wait behind a
+# video render. Everything else stays on the default queue.
+CELERY_TASK_ROUTES = {
+    "agents.manager.tasks.telegram_update": {"queue": "chat"},
+}
 # celery = Docker/server with Redis; thread = laptop without Redis (CELERY_EAGER=1)
 JOBS_MODE = env("JOBS_MODE", "thread" if CELERY_TASK_ALWAYS_EAGER else "celery")
+# Small server: CHAT_JOBS_MODE=thread answers Telegram inside the web process, so no second worker is needed
+# and a reply still never waits behind a video render. Empty = same as JOBS_MODE (the "chat" queue).
+CHAT_JOBS_MODE = env("CHAT_JOBS_MODE", "")
+# Shared small server: the worker sleeps outside these India-time windows unless a job is waiting
+# (core/worker_sleep.py; deploy/worker-wake.sh wakes it). Windows cover the 06:00, 07:00, 14:00 and 21:00 jobs.
+WORKER_SLEEPS = env_bool("WORKER_SLEEPS", False)
+WORK_WINDOWS = env("WORK_WINDOWS", "05:50-07:30,13:50-14:30,20:50-21:20")
+WORKER_IDLE_MINUTES = int(env("WORKER_IDLE_MINUTES", "15"))
 
 # --- Media (videos, images). Later: Azure Blob / Cloudflare R2 -------------------
 MEDIA_URL = f"{URL_PREFIX}/media/"

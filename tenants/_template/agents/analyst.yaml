@@ -1,9 +1,9 @@
 # Agent card. Edit and run `load_tenants`: a NEW version is created, old kept.
 key: analyst
 name: Analyst
-role: Watches views on every posted Short and tells the team which ideas work
+role: Watches views on every posted Short, tells the team which ideas work, and finds out why Shorts are not seen
 status: active
-autonomy: 3                 # only reads numbers; changes nothing public
+autonomy: 3                 # reads numbers; its fixes only become rules after you say yes
 model: gemini/gemini-3.5-flash-lite
-monthly_budget_usd: 0       # YouTube statistics are free
-changelog: Daily YouTube views, likes and comments; scores content ideas
+monthly_budget_usd: 1       # YouTube statistics are free; the "Why so few views?" check costs < $0.01
+changelog: Why-so-few-views check - compares with top Shorts, watches ours, 3 fixes for your yes

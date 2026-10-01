@@ -1,0 +1,21 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Chat · Seyalini{% endblock %}
+{% block content %}
+<section class="stack" style="gap:6px">
+  <div class="row"><a class="btn small" href="{% url 'dashboard:home' %}">← Today</a></div>
+  <h1>Chat with the Manager</h1>
+  <p class="muted" style="margin:0">Ask anything about your Shorts, or tell it what to do: approve a script or video, ask for changes, make a new Short, check views.
+    {% if telegram %}The same chat is on your Telegram.{% elif is_owner %}<a href="{% url 'dashboard:settings' %}#chat">Chat from Telegram on your phone too →</a>{% endif %}</p>
+</section>
+{% if dry_run %}<div class="note warn"><b>Practice mode:</b> no Gemini key yet, so replies are samples.</div>{% endif %}
+
+{% include "dashboard/partials/chat_messages.html" %}
+
+<form hx-post="{% url 'dashboard:chat_send' %}" hx-target="#chat-log" hx-swap="outerHTML" hx-disabled-elt="find button"
+      hx-on::after-request="this.reset()" method="post" action="{% url 'dashboard:chat_send' %}"
+      class="row" style="position:sticky;bottom:84px;gap:8px;flex-wrap:nowrap;background:var(--bg);padding:8px 0">{% csrf_token %}
+  <label for="chat-text" style="position:absolute;left:-9999px">Message</label>
+  <input id="chat-text" name="text" required autocomplete="off" placeholder="Message the Manager…" style="flex:1;min-height:48px;border:1px solid var(--line);border-radius:24px;padding:0 16px;background:var(--panel);color:var(--ink);font:inherit">
+  <button class="btn primary">Send</button>
+</form>
+{% endblock %}

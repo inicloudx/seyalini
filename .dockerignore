@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+*.sqlite3
+media/
+staticfiles/
+nginx/
+deploy/
+.claude/
+*.log
+*.zip
+celerybeat-schedule*

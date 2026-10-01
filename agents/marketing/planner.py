@@ -33,6 +33,8 @@ def plan_next(product: Product, slot: str = "any") -> dict:
     pillar = max(pillars, key=lambda p: (last_seen.get(p["key"], 10_000) + 1) * float(scores.get(p["key"], 1.0)))
 
     plan = {"pillar": pillar["key"], "pillar_name": pillar["name"], "pillar_idea": pillar.get("idea", ""), "slot": slot}
+    if pillar.get("audience"):
+        plan["audience"] = pillar["audience"]  # kids -> Made for Kids on YouTube; adults -> speak to parents/teachers
 
     # 2. letter: next in A-Z after the last one, skipping recently used
     if pillar.get("uses_letter"):

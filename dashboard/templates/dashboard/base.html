@@ -103,6 +103,7 @@ details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-
     <div class="mark" aria-hidden="true">{{ tenant.theme.logo_text|default:"S" }}</div>
     <div class="org"><b>{{ tenant.name|default:"Seyalini" }}</b><span>{{ user.get_username }}{% if role %} · {{ role|capfirst }}{% endif %}</span></div>
     <div class="right">
+      {% if can_review %}<a class="btn small" href="{% url 'dashboard:chat' %}" title="Chat with the Manager" aria-label="Chat with the Manager">💬<span class="hide-phone">Chat</span></a>{% endif %}
       {% if tenants|length > 1 %}
       <form method="post" action="{% url 'dashboard:switch_tenant' %}">{% csrf_token %}
         <label for="tenant-select" class="small muted" style="position:absolute;left:-9999px">Organisation</label>

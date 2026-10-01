@@ -1,0 +1,38 @@
+{% with r=task.result %}
+<article class="card stack" id="task-{{ task.id }}">
+  <div class="row" style="justify-content:space-between;gap:6px">
+    <span class="pill info">🔍 Why so few views · {{ task.product.name }}</span>
+    <span class="muted small">{{ r.checked }} Short{{ r.checked|pluralize }} checked{% if r.watched %}, {{ r.watched }} watched{% endif %}</span>
+  </div>
+  <p style="margin:0;font-weight:600">{{ r.summary }}</p>
+  {% if r.causes %}<ol class="small stack" style="margin:0;padding-left:20px">
+    {% for c in r.causes %}<li style="margin:0"><b>{{ c.cause }}</b>: {{ c.evidence }}</li>{% endfor %}
+  </ol>{% endif %}
+  <div class="stack" style="gap:6px">
+    <span class="small muted">3 fixes</span>
+    {% for f in r.fixes %}<div class="small"><span class="pill{% if f.who == 'you' %} warn{% endif %}">{% if f.who == "you" %}You{% else %}Marketing agent{% endif %}</span>
+      <b>{{ f.fix }}</b>{% if f.why %}<div class="muted">{{ f.why }}</div>{% endif %}</div>{% endfor %}
+  </div>
+  {% if r.test %}<p class="small" style="margin:0;color:var(--info)"><b>Test this week:</b> {{ r.test }}</p>{% endif %}
+  {% if can_review %}
+  <form hx-post="{% url 'dashboard:decide' task.id %}" hx-target="#task-{{ task.id }}" hx-swap="outerHTML" hx-disabled-elt="find button"
+        method="post" action="{% url 'dashboard:decide' task.id %}" class="stack">
+    {% csrf_token %}
+    <button class="btn good wide" name="decision" value="approved">✓ Use the fixes</button>
+    <details>
+      <summary class="btn wide" style="display:flex">Look again</summary>
+      <div class="stack" style="margin-top:10px">
+        <fieldset style="border:0;padding:0;margin:0" class="row">
+          <legend class="small muted" style="margin-bottom:6px">What should it look at?</legend>
+          {% for c in task.chips %}<label class="chip"><input type="radio" name="chip" value="{{ c }}"> {{ c }}</label>{% endfor %}
+        </fieldset>
+        <input name="reason" aria-label="Or say it in your words" placeholder="Or say it in your words" style="min-height:48px;border:1px solid var(--line);border-radius:12px;padding:0 14px;background:var(--panel);color:var(--ink);font:inherit">
+        <button class="btn primary wide" name="decision" value="redo">Check again</button>
+      </div>
+    </details>
+    <button class="btn wide" name="decision" value="discarded" style="color:var(--bad)">✕ Don't use them</button>
+  </form>
+  <p class="small muted" style="margin:0">Marketing fixes become rules for every new script. In the chat you can also say “use fixes 1 and 3”.</p>
+  {% endif %}
+</article>
+{% endwith %}

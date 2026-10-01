@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Daily backup (cron as seyalini):  30 2 * * * /opt/seyalini/app/deploy/backup.sh
-# Keeps 14 days of database copies + the tenants folder. Approved videos stay in data/media.
+# Daily database backup (server-setup.sh adds it to cron: 03:15). Keeps 14 days of copies in
+# ~/seyalini-backups, outside Docker. Videos are not copied: approved ones are already on YouTube.
 set -euo pipefail
-DEST=/opt/seyalini/backups/$(date +%F)
+cd "$(dirname "$0")/.."
+DEST=$HOME/seyalini-backups
 mkdir -p "$DEST"
-sqlite3 /opt/seyalini/data/db.sqlite3 ".backup '$DEST/db.sqlite3'"
-tar -czf "$DEST/tenants.tgz" -C /opt/seyalini/app tenants
-find /opt/seyalini/backups -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +
+docker compose exec -T web python -c "
+import sqlite3
+src, dst = sqlite3.connect('/app/data/db.sqlite3'), sqlite3.connect('/app/data/backup.sqlite3')
+src.backup(dst); dst.close(); src.close()"
+docker cp seyalini_web:/app/data/backup.sqlite3 "$DEST/db-$(date +%F).sqlite3"
+docker compose exec -T web tar -czf /app/data/tenants-backup.tgz -C /app/data tenants
+docker cp seyalini_web:/app/data/tenants-backup.tgz "$DEST/tenants-$(date +%F).tgz"
+find "$DEST" -name 'db-*.sqlite3' -mtime +14 -delete
+find "$DEST" -name 'tenants-*.tgz' -mtime +14 -delete

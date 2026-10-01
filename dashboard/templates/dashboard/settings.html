@@ -45,6 +45,32 @@
   {% endif %}
 </section>
 
+<section class="card stack" id="chat" aria-label="Approve from your phone">
+  <div class="row" style="justify-content:space-between"><h2>Approve from your phone</h2>
+    {% if tg.connected %}<span class="pill ok">● Telegram connected</span>{% else %}<span class="pill">Not connected</span>{% endif %}</div>
+  <p class="muted small" style="margin:0">The Manager sends every script and video to Telegram with Yes / No buttons, tells you when a Short is posted, and answers your questions. You can also chat inside Seyalini with the 💬 button.</p>
+  {% if tg.connected %}
+    <p style="margin:0">Open {% if tg.bot %}<a href="https://t.me/{{ tg.bot }}" target="_blank" rel="noopener">@{{ tg.bot }}</a>{% else %}your bot{% endif %} in Telegram and just type.</p>
+    <form method="post" autocomplete="off">{% csrf_token %}<input type="hidden" name="section" value="keys"><input type="hidden" name="remove_TELEGRAM_CHAT_ID" value="1"><button class="btn small">Disconnect this phone</button></form>
+  {% elif tg.code %}
+    <div class="note info">Open {% if tg.bot %}<a href="https://t.me/{{ tg.bot }}?start={{ tg.code }}" target="_blank" rel="noopener"><b>@{{ tg.bot }}</b></a>{% else %}your bot{% endif %} in Telegram and send:<br><b style="font-size:20px">/start {{ tg.code }}</b><br>Then refresh this page.</div>
+  {% else %}
+    <ol class="small" style="margin:0;padding-left:20px">
+      <li>In Telegram, open <b>@BotFather</b>, send <b>/newbot</b>, pick a name. It gives you a <b>token</b>.</li>
+      <li>Paste the token below and save.</li>
+      <li>Tap <b>Connect my phone</b> and send the code to your bot.</li>
+    </ol>
+  {% endif %}
+  {% if not tg.connected %}
+  <form method="post" class="form" autocomplete="off">{% csrf_token %}<input type="hidden" name="section" value="keys">
+    <div><label for="k-TELEGRAM_BOT_TOKEN">Telegram bot token</label>
+      <input id="k-TELEGRAM_BOT_TOKEN" name="TELEGRAM_BOT_TOKEN" type="password" autocomplete="new-password" placeholder="{% if tg.token %}Saved: {{ tg.token.hint }} (leave empty to keep){% else %}Paste the token from @BotFather{% endif %}"></div>
+    <button class="btn" style="align-self:flex-start">Save</button>
+  </form>
+  {% if tg.token %}<form method="post" action="{% url 'dashboard:telegram_connect' %}">{% csrf_token %}<button class="btn primary">{% if tg.code %}Get a new code{% else %}Connect my phone{% endif %}</button></form>{% endif %}
+  {% endif %}
+</section>
+
 <section class="card form" id="ai" aria-label="AI keys">
   <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
     <h2>AI keys</h2>

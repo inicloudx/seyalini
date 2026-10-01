@@ -890,3 +890,279 @@ class ScoutTests(TestCase):
             notes = scout._watch(agent, self.product, self.videos[1], task)
         self.assertFalse(notes["watched"])
         self.assertEqual(notes["hook"], "Wow (guess)")
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class ManagerChatTests(TestCase):
+    """Approve from your phone: the Manager sends scripts and videos with buttons and acts on plain words."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+        self.script = write_script(self.product)
+
+    def _last(self):
+        from core.models import ChatMessage
+
+        return ChatMessage.objects.filter(role="agent").last()
+
+    def _tap(self, action):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post("/chat/send/", {"action": action})
+
+    def test_script_to_video_to_youtube_from_the_phone(self):
+        msg = self._last()
+        self.assertIn("New script", msg.text)
+        self.assertEqual([b[1] for b in msg.buttons], [f"d:{self.script.id}:approved", f"r:{self.script.id}",
+                                                         f"d:{self.script.id}:discarded"])
+        self._tap(f"d:{self.script.id}:approved")               # script: yes -> the video is made
+        video = Task.objects.get(kind="short_video", parent=self.script)
+        self.assertEqual(video.status, "awaiting_approval")
+        from core.models import ChatMessage
+
+        ask = ChatMessage.objects.filter(text__startswith="🎬 Video ready").last()
+        self.assertEqual(ask.buttons[0][1], f"d:{video.id}:approved")
+        self._tap(ask.buttons[0][1])                            # video: yes -> posted
+        self.assertTrue(Task.objects.filter(kind="publish_youtube", parent=video, status="done").exists())
+        self.assertIn("Posted to YouTube", self._last().text)
+
+    def test_change_asks_what_then_redoes_and_remembers(self):
+        self._tap(f"r:{self.script.id}")
+        self.assertIn("What should change", self._last().text)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post("/chat/send/", {"text": "Make the hook a question"})
+        self.script.refresh_from_db()
+        self.assertEqual(self.script.approval.decision, "redo")
+        self.assertTrue(Rule.objects.filter(agent_key="marketing", text="Make the hook a question").exists())
+        self.assertTrue(Task.objects.filter(kind="short_script", parent=self.script, status="awaiting_approval").exists())
+
+    def test_plain_words_become_actions(self):
+        import json
+        from unittest import mock
+
+        from agents.runtime import AgentRuntime
+
+        reply = {"reply": "On it!", "actions": [{"do": "new_short", "app": "alphamagic"}]}
+        with self.captureOnCommitCallbacks(execute=True):  # the new script is written after the reply
+            with mock.patch.object(AgentRuntime, "think", return_value=json.dumps(reply)):
+                self.client.post("/chat/send/", {"text": "make one more short please"})
+        from core.models import ChatMessage
+
+        self.assertEqual(Task.objects.filter(kind="short_script").count(), 2)
+        self.assertTrue(ChatMessage.objects.filter(role="agent", text__startswith="On it!").exists())
+        self.assertIn("New script", self._last().text)  # and the new script arrives right after
+        self.assertIn("Chat with the Manager", self.client.get("/chat/").content.decode())
+
+    def test_actions_cannot_reach_other_organisations(self):
+        from agents.manager import chat
+
+        other = Tenant.objects.create(slug="other", name="Other")
+        self.assertIn("can't find", chat.act(other, {"do": "approve", "task_id": self.script.id}))
+        self.script.refresh_from_db()
+        self.assertEqual(self.script.status, "awaiting_approval")
+
+    def test_telegram_link_webhook_and_privacy(self):
+        import json
+        from unittest import mock
+
+        from core.secrets import get_secret, set_secret
+        from tools import telegram
+
+        set_secret(self.tenant, "TELEGRAM_BOT_TOKEN", "123:abc-token")
+        with mock.patch.object(telegram, "call", return_value={"username": "seyalini_bot"}):
+            self.client.post("/settings/telegram/connect/")
+        self.tenant.refresh_from_db()
+        code = self.tenant.settings["telegram_link"]["code"]
+        url, secret = f"/chat/telegram/{self.tenant.slug}/", telegram.webhook_secret(self.tenant)
+
+        def update(body, key=secret):
+            return self.client.post(url, json.dumps(body), content_type="application/json",
+                                    HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN=key)
+
+        with mock.patch.object(telegram, "send_chat", return_value=True) as sent, \
+             mock.patch.object(telegram, "call", return_value=True):
+            self.assertEqual(update({"message": {"chat": {"id": 555}, "text": "hi"}}, key="wrong").status_code, 403)
+            update({"message": {"chat": {"id": 999}, "text": "hi"}})  # a stranger before linking
+            self.assertIn("private", sent.call_args[0][1])
+            update({"message": {"chat": {"id": 555}, "text": f"/start {code}"}})
+            self.assertEqual(get_secret(self.tenant, "TELEGRAM_CHAT_ID"), "555")
+            self.assertIn("Manager", sent.call_args[0][1])
+            update({"message": {"chat": {"id": 999}, "text": "approve everything"}})  # still a stranger
+            self.assertIn("private", sent.call_args[0][1])
+            update({"callback_query": {"id": "c1", "data": f"d:{self.script.id}:discarded", "message": {"chat": {"id": 555}}}})
+            self.script.refresh_from_db()
+            self.assertEqual(self.script.status, "rejected")
+            update({"message": {"chat": {"id": 555}, "text": "what's waiting for me?"}})
+            self.assertIn("Practice mode", sent.call_args[0][1])
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class AudienceTests(TestCase):
+    """Made for Kids is decided per content idea: kids' ideas yes, parent / teacher ideas no."""
+
+    def setUp(self):
+        load_all()
+        self.product = Product.objects.get(slug="alphamagic")
+
+    def _video_for(self, pillar):
+        t = self.product.tenant
+        script = Task.objects.create(tenant=t, product=self.product, agent_key="marketing", kind="short_script",
+                                     title="s", status="approved", payload={"pillar": pillar})
+        return Task.objects.create(tenant=t, product=self.product, agent_key="marketing", kind="short_video",
+                                   title="v", status="approved", parent=script, result={"title": "Short"})
+
+    def test_made_for_kids_follows_the_idea(self):
+        from agents.publisher.youtube_publisher import build_metadata
+
+        self.assertTrue(build_metadata(self._video_for("letter_of_the_day"))["made_for_kids"])
+        self.assertFalse(build_metadata(self._video_for("teacher_corner"))["made_for_kids"])
+        self.assertFalse(build_metadata(self._video_for("parent_tip"))["made_for_kids"])
+        self.assertTrue(build_metadata(self._video_for("unknown"))["made_for_kids"])  # the app's default
+
+    def test_plan_carries_audience_and_editing_keeps_it(self):
+        from agents.marketing import strategist
+        from agents.marketing.planner import plan_next
+
+        plan = plan_next(self.product)
+        pillar = next(p for p in self.product.config["pillars"] if p["key"] == plan["pillar"])
+        self.assertEqual(plan.get("audience"), pillar.get("audience"))
+        old = self.product.config["pillars"]
+        text = strategist.pillars_to_text(old)
+        self.assertIn("Teacher Corner | How preschool", text)
+        self.assertIn("| adults", text)
+        same = lambda ps: [(p["key"], p["idea"], bool(p.get("uses_letter")), p.get("audience")) for p in ps]
+        self.assertEqual(same(strategist.parse_pillars_text(text, old)), same(old))
+        edited = strategist.parse_pillars_text("Parent Tip | new idea\nBedtime Story | calm story | children", old)
+        self.assertEqual([p.get("audience") for p in edited], ["adults", "kids"])  # kept, and a new word
+
+
+@override_settings(LLM_DRY_RUN=True, JOBS_MODE="sync", MEDIA_ROOT=TMP_MEDIA)
+class DiagnosisTests(TestCase):
+    """Why so few views? The Analyst finds causes and 3 fixes; Marketing fixes become rules only after your yes."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser("nithy", "n@example.com", "pw")
+        load_all()
+        self.tenant = Tenant.objects.get(slug="inixr")
+        self.product = Product.objects.get(slug="alphamagic")
+        self.client.force_login(self.user)
+        for i in range(3):
+            script = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing", kind="short_script",
+                                         title=f"s{i}", status="approved", payload={"pillar": "teacher_corner"},
+                                         result={"hook": "Hello teachers", "title": f"Short {i}"})
+            video = Task.objects.create(tenant=self.tenant, product=self.product, agent_key="marketing", kind="short_video",
+                                        title=f"v{i}", status="approved", parent=script, result={"seconds": 27})
+            Task.objects.create(tenant=self.tenant, product=self.product, agent_key="publisher", kind="publish_youtube",
+                                title=f"YouTube: Short {i}", status="done", parent=video,
+                                result={"video_id": f"v{i}", "url": f"https://youtube.com/shorts/v{i}", "privacy": "private",
+                                        "stats": {"views": 2, "likes": 0, "privacy": "public"}})
+
+    def _decide(self, task, decision, reason=""):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/tasks/{task.id}/decide/", {"decision": decision, "reason": reason})
+
+    def _check(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post("/videos/why/")
+        return Task.objects.filter(kind="view_diagnosis").first()
+
+    def test_check_explains_and_yes_turns_fixes_into_rules(self):
+        from core.models import ChatMessage
+
+        d = self._check()
+        self.assertEqual(d.status, "awaiting_approval")
+        self.assertEqual(len(d.result["fixes"]), 3)
+        self.assertEqual(d.result["checked"], 3)
+        msg = ChatMessage.objects.filter(text__startswith="🔍 Why so few views").last()
+        self.assertEqual(msg.buttons[0][1], f"d:{d.id}:approved")
+        self.assertIn("Why so few views", self.client.get("/").content.decode())
+        self.assertFalse(Rule.objects.filter(source="analyst").exists())  # nothing changes before your yes
+        self._decide(d, "approved")
+        d.refresh_from_db()
+        self.assertEqual(d.status, "done")
+        marketing = [f["fix"] for f in d.result["fixes"] if f["who"] == "marketing"]
+        self.assertEqual(sorted(Rule.objects.filter(source="analyst", agent_key="marketing").values_list("text", flat=True)),
+                         sorted(marketing))
+
+    def test_use_only_some_fixes_from_chat(self):
+        from agents.manager import chat
+
+        d = self._check()
+        line = chat.act(self.tenant, {"do": "use_fixes", "task_id": d.id, "fixes": [2]})
+        self.assertIn("1 new rule", line)
+        self.assertEqual(list(Rule.objects.filter(source="analyst").values_list("text", flat=True)), [d.result["fixes"][1]["fix"]])
+
+    def test_look_again_with_a_note(self):
+        d = self._check()
+        self._decide(d, "redo", "Check the titles too")
+        again = Task.objects.get(kind="view_diagnosis", parent=d)
+        self.assertEqual((again.status, again.payload["note"]), ("awaiting_approval", "Check the titles too"))
+
+    def test_nothing_posted_means_a_clear_message(self):
+        from agents.analyst.diagnose import diagnose
+
+        Task.objects.filter(kind="publish_youtube").delete()
+        d = diagnose(self.product)
+        self.assertEqual(d.status, "failed")
+        self.assertIn("No Shorts posted", d.result["error"])
+
+
+class SmallServerTests(TestCase):
+    """Sharing a small server: the worker sleeps without work, and the Docker volume keeps dashboard edits."""
+
+    def test_worker_sleeps_only_when_truly_idle(self):
+        from datetime import time as t
+
+        from core.worker_sleep import in_window, parse_windows, should_stop
+
+        w = parse_windows("05:50-07:30, 20:50-21:20, nonsense")
+        self.assertEqual(len(w), 2)
+        self.assertTrue(in_window(t(6, 0), w))
+        self.assertFalse(in_window(t(7, 30), w))
+        quiet = dict(windows=w, busy=False, idle_seconds=16 * 60, queued=0, idle_minutes=15)
+        self.assertTrue(should_stop(t(12, 0), **quiet))                           # midday, nothing to do
+        self.assertFalse(should_stop(t(6, 30), **quiet))                          # a work window is open
+        self.assertFalse(should_stop(t(12, 0), **{**quiet, "busy": True}))        # a video is rendering
+        self.assertFalse(should_stop(t(12, 0), **{**quiet, "queued": 1}))         # you just approved something
+        self.assertFalse(should_stop(t(12, 0), **{**quiet, "idle_seconds": 60}))  # finished a minute ago
+
+    def test_tenants_volume_keeps_dashboard_edits_and_refreshes_agent_cards(self):
+        import shutil
+
+        from django.core.management import call_command
+
+        vol = Path(tempfile.mkdtemp(prefix="seyalini-test-vol-")) / "tenants"
+        with override_settings(TENANTS_DIR=vol):
+            call_command("seed_tenants")
+            product, card = vol / "inixr/products/alphamagic/product.yaml", vol / "inixr/agents/scout.yaml"
+            self.assertTrue(product.exists() and card.exists())
+            product.write_text("edited on the server", encoding="utf-8")
+            card.write_text("old card", encoding="utf-8")
+            call_command("seed_tenants")
+            self.assertEqual(product.read_text(encoding="utf-8"), "edited on the server")  # the dashboard owns apps
+            self.assertIn("key: scout", card.read_text(encoding="utf-8"))                  # git owns agent cards
+        shutil.rmtree(vol.parent)
+
+    def test_lean_switches(self):
+        from unittest import mock
+
+        from core import jobs
+        from tools import editor
+
+        ran = []
+        fake = mock.Mock(run=lambda *a: ran.append(a), delay=mock.Mock())
+        with override_settings(JOBS_MODE="celery"):
+            jobs.enqueue(fake, 1, mode="sync")  # e.g. CHAT_JOBS_MODE: this one job skips the queue
+            self.assertEqual(ran, [(1,)])
+            fake.delay.assert_not_called()
+            jobs.enqueue(fake, 2)
+            fake.delay.assert_called_once_with(2)
+        with mock.patch.dict("os.environ", {"FFMPEG_THREADS": "1"}), \
+             mock.patch("tools.editor.subprocess.run", return_value=mock.Mock(returncode=0)) as run:
+            editor.ffmpeg("-i", "in.mp4", "out.mp4")
+        cmd = run.call_args[0][0]
+        self.assertEqual(cmd[-3:], ["-threads", "1", "out.mp4"])
+        self.assertIn("-filter_complex_threads", cmd)

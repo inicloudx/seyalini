@@ -69,6 +69,7 @@
         {% if task.result.questions %}<p class="muted small" style="margin:0">It has {{ task.result.questions|length }} question{{ task.result.questions|length|pluralize }} for you.</p>{% endif %}
         <a class="btn primary" href="{% url 'dashboard:product' task.product.slug %}">Review the brief</a>
       </article>
+      {% elif task.kind == "view_diagnosis" %}{% include "dashboard/partials/diagnosis.html" %}
       {% else %}{% include "dashboard/partials/approval.html" %}{% endif %}
     {% empty %}
       <div class="card" style="text-align:center;padding:28px 18px">

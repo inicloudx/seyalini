@@ -1,3 +1,7 @@
-# Server files must keep Linux line endings (bash and systemd break on CRLF)
+# Server files must keep Linux line endings (bash and Docker break on CRLF)
 *.sh text eol=lf
 deploy/* text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+nginx/* text eol=lf
+.dockerignore text eol=lf

@@ -18,7 +18,7 @@ from agents.llm import parse_json
 from agents.runtime import AgentRuntime
 from core.models import Approval, Event, Product, Task
 from core.product_files import product_dir, write_product_files
-from tools import playstore, telegram
+from tools import playstore
 
 DEFAULT_PILLARS = [
     {"key": "watch_the_magic", "name": "See it in action", "idea": "The best moment of the app, shown in real use"},
@@ -42,14 +42,16 @@ collection claims beyond what is stated, no real children's faces in AI visuals)
 Reply with ONLY a JSON object:
 {
  "brief_markdown": "the full brief in Markdown with these sections: # <App> - Brand Brief; ## 1. The App (one-line pitch, what happens in the app, key features, pricing, store link); ## 2. Audience (primary, secondary, language); ## 3. Why people install (benefits, pains solved, proof points from the listing); ## 4. Tone & Look; ## 5. Content Pillars (table: pillar, idea, example hook); ## 6. Every Short must have; ## 7. Posting rules; ## 8. Never do; ## 9. Hashtags",
- "pillars": [{"key": "snake_case", "name": "short name", "idea": "one line", "uses_letter": false}],
+ "pillars": [{"key": "snake_case", "name": "short name", "idea": "one line", "uses_letter": false, "audience": "kids"}],
  "visual_style": "one paragraph describing the look for AI image/video prompts (colours, style, characters, setting, lighting) based on the screenshots",
  "hashtags": ["#..."],
  "made_for_kids": true,
  "improvements": ["what you added or sharpened compared to the founder's notes"],
  "questions": ["short questions for the founder about gaps"]
 }
-Give 5-7 pillars. Set uses_letter=true only for pillars that rotate through the alphabet A-Z."""
+Give 5-7 pillars. Set uses_letter=true only for pillars that rotate through the alphabet A-Z.
+audience = who each pillar's Shorts speak to: "kids" (made for children; YouTube marks them Made for Kids)
+or "adults" (parents, teachers, buyers). Be honest: content aimed at children is always "kids"."""
 
 
 def _answers_text(a: dict) -> str:
@@ -186,8 +188,14 @@ def research_product(product: Product, answers: dict, parent: Task | None = None
     task.save()
     Approval.objects.create(tenant=product.tenant, task=task)
     agent.log("awaiting_approval", f"Brand brief ready for your review: {product.name}", task=task)
-    telegram.send(f"Brand brief ready for review: {product.name}\n{settings.DASHBOARD_URL}/products/{product.slug}/", tenant=product.tenant)
+    from agents.manager import chat as manager
+
+    manager.notify(product.tenant, f"📋 Brand brief ready for review: {product.name}\n{settings.DASHBOARD_URL}/products/{product.slug}/")
     return task
+
+
+AUDIENCES = ("kids", "adults")
+AUDIENCE_WORDS = {"kids": "kids", "children": "kids", "adults": "adults", "parents": "adults", "teachers": "adults"}
 
 
 def _clean_pillars(pillars) -> list[dict]:
@@ -199,32 +207,46 @@ def _clean_pillars(pillars) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({"key": key, "name": str(p["name"])[:60], "idea": str(p.get("idea", ""))[:200],
-                    "uses_letter": bool(p.get("uses_letter"))})
+        item = {"key": key, "name": str(p["name"])[:60], "idea": str(p.get("idea", ""))[:200],
+                "uses_letter": bool(p.get("uses_letter"))}
+        if p.get("audience") in AUDIENCES:
+            item["audience"] = p["audience"]
+        out.append(item)
     return out[:8]
 
 
-def parse_pillars_text(text: str) -> list[dict]:
-    """Editable format on the review page: one pillar per line, 'Name | idea' (add ' | letters' to rotate A-Z)."""
+def parse_pillars_text(text: str, old: list[dict] | None = None) -> list[dict]:
+    """Editable format on the review page: one pillar per line, 'Name | idea', then optional flags:
+    '| letters' to rotate A-Z, '| kids' or '| adults' for who the Shorts speak to (YouTube Made for Kids).
+    Settings the text does not show (e.g. an audience set in product.yaml) are kept from `old`."""
+    before = {p["key"]: p for p in old or []}
     pillars = []
     for line in text.splitlines():
         parts = [p.strip() for p in line.split("|")]
         if not parts or not parts[0]:
             continue
-        pillars.append({"key": parts[0], "name": parts[0], "idea": parts[1] if len(parts) > 1 else "",
-                        "uses_letter": len(parts) > 2 and parts[2].lower().startswith("letter")})
+        flags = [f.lower() for f in parts[2:]]
+        item = {"key": parts[0], "name": parts[0], "idea": parts[1] if len(parts) > 1 else "",
+                "uses_letter": any(f.startswith("letter") for f in flags)}
+        audience = next((AUDIENCE_WORDS[f] for f in flags if f in AUDIENCE_WORDS), None)
+        key = slugify(parts[0]).replace("-", "_")[:40]
+        if audience or before.get(key, {}).get("audience"):
+            item["audience"] = audience or before[key]["audience"]
+        pillars.append(item)
     return _clean_pillars(pillars)
 
 
 def pillars_to_text(pillars: list[dict]) -> str:
-    return "\n".join(f"{p['name']} | {p.get('idea', '')}" + (" | letters" if p.get("uses_letter") else "") for p in pillars)
+    return "\n".join(f"{p['name']} | {p.get('idea', '')}" + (" | letters" if p.get("uses_letter") else "")
+                     + (f" | {p['audience']}" if p.get("audience") else "") for p in pillars)
 
 
 @transaction.atomic
 def activate(product: Product, user, brief: str, pillars_text: str, visual_style: str) -> Product:
     cfg = dict(product.config or {})
     draft = cfg.pop("draft", {}) or {}
-    pillars = parse_pillars_text(pillars_text) or draft.get("pillars") or cfg.get("pillars") or DEFAULT_PILLARS
+    old = draft.get("pillars") or cfg.get("pillars")
+    pillars = parse_pillars_text(pillars_text, old) or old or DEFAULT_PILLARS
     cfg.update({
         "marketing": True,
         "pillars": pillars,

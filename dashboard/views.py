@@ -22,6 +22,7 @@ from core.models import AgentCard, Approval, Event, Product, Rule, Task, Tenant
 REASON_CHIPS = {
     "short_script": ["Weak hook", "Too long", "Off-brand", "Too similar to a recent one", "Not kid-friendly", "Wrong facts"],
     "short_video": ["Too dark", "Text hard to read", "Visuals off-brand", "Boring, needs more motion", "Character looks wrong", "Not kid-friendly"],
+    "view_diagnosis": ["Not accurate", "Already tried that", "Not our style"],
 }
 
 
@@ -209,6 +210,26 @@ def scout_now(request):
         enqueue(run_scout, request.tenant.id)
         messages.success(request, "The Scout is studying today's top Shorts. Refresh in a couple of minutes.")
     return redirect("dashboard:home")
+
+
+@login_required
+@require_role("reviewer")
+@require_POST
+def diagnose_now(request):
+    from agents.analyst.diagnose import is_recent
+    from agents.analyst.tasks import diagnose_views
+
+    products = [p for p in Product.objects.filter(tenant=request.tenant, status="live")
+                if Task.objects.filter(product=p, kind="publish_youtube", status="done").exists()]
+    if not products:
+        messages.error(request, "Post a Short to YouTube first: then the Analyst can check why it gets few views.")
+    for p in products:
+        if not is_recent(p):
+            enqueue(diagnose_views, p.id, "")
+    if products:
+        messages.success(request, "The Analyst is checking why views are low. The causes and 3 fixes appear on Today "
+                                  "(and on Telegram) in a minute.")
+    return redirect("dashboard:videos")
 
 
 @login_required
